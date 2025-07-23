@@ -1,0 +1,8 @@
+flake8
+tox
+isort
+black
+yamllint
+opensearch-py
+docopt
+requests
