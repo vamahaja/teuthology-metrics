@@ -9,6 +9,7 @@ Usage:
         [--suite=<suite>]
         [--status=<status>]
         [--date=<date>]
+        [--skip-logs]
 
 Options:
     --config=<cfg-file>           Path to the configuration file.
@@ -19,6 +20,7 @@ Options:
     --suite=<suite>               Filter by suite.
     --status=<status>             Filter by status.
     --date=<date>                 Filter by date (YYYY-MM-DD).
+    --skip-logs                   Skip job logs.
 """
 
 import json
@@ -50,10 +52,12 @@ def get_data(url):
 
     # Validate the response
     if response.status_code == 200:
-        # Check response content type
         ctype = response.headers.get("Content-Type", "").lower()
         if ctype == "application/json":
             return response.json()
+
+        elif ctype.startswith("text/plain"):
+            return response.text
 
         else:
             raise ValueError(f"Unexpected Content-Type : {ctype}")
@@ -79,7 +83,7 @@ def get_runs(base_url, segments):
     return get_data(url)
 
 
-def get_jobs(run, output_dir):
+def get_jobs(run, jobs_dir, logs_dir):
     """Fetch jobs for the given teuthology run"""
     hrefs, job_ids = run.get("href"), []
 
@@ -87,14 +91,22 @@ def get_jobs(run, output_dir):
     if hrefs and isinstance(hrefs, list) and len(hrefs) > 0:
         print(f"Fetching jobs for run: {run.get('name')}")
         for job in get_data(hrefs[0]).get("jobs", []):
+            # Get log reference and job id
+            log_href, job_id = job.get("log_href"), job.get("job_id")
+
             print(f"Processing job: {job.get('job_id')}")
 
             # Update job id list
-            job_ids.append(job.get("job_id"))
+            job_ids.append(job_id)
 
-            # Create output directory with job_id name
-            run_dir = os.path.join(output_dir, f"{job.get('job_id')}.json")
-            write_job_metadata(run_dir, job)
+            # Write job id metadata
+            job_path = os.path.join(jobs_dir, f"{job_id}.json")
+            write_job_metadata(job_path, job)
+
+            if logs_dir:
+                # Write job id logs
+                log_path = os.path.join(logs_dir, f"{job_id}.log")
+                write_job_logs(log_path, get_data(log_href))
 
         return job_ids
 
@@ -102,16 +114,7 @@ def get_jobs(run, output_dir):
     return []
 
 
-def write_job_metadata(_file, metadata):
-    """Write data to a JSON file"""
-    print(f"Writing data to {_file}")
-
-    # Open the file and write the metadata
-    with open(_file, "w") as _f:
-        json.dump(metadata, _f, indent=2)
-
-
-def main(config_file, segments, output_dir):
+def main(config_file, segments, output_dir, skip_logs):
     # Get paddle base URL
     base_url = get_paddle_baseurl(config_file)
 
@@ -126,11 +129,34 @@ def main(config_file, segments, output_dir):
         jobs_dir = os.path.join(run_dir, "jobs")
         os.makedirs(jobs_dir, exist_ok=True)
 
+        logs_dir = None
+        if not skip_logs:
+            logs_dir = os.path.join(run_dir, "logs")
+            os.makedirs(logs_dir, exist_ok=True)
+
         # Get jobs for the run
-        run["job_ids"] = get_jobs(run, jobs_dir)
+        run["job_ids"] = get_jobs(run, jobs_dir, logs_dir)
 
         # Write jobs to output directory
         write_job_metadata(os.path.join(run_dir, "results.json"), run)
+
+
+def write_job_metadata(_file, metadata):
+    """Write data to a JSON file"""
+    print(f"Writing data to {_file}")
+
+    # Open the file and write the metadata
+    with open(_file, "w") as _f:
+        json.dump(metadata, _f, indent=2)
+
+
+def write_job_logs(_file, logs):
+    """Write logs to a file"""
+    print(f"Writing logs to {_file}")
+
+    # Open the file and write logs
+    with open(_file, "w") as _f:
+        _f.write(logs)
 
 
 if __name__ == "__main__":
@@ -144,6 +170,11 @@ if __name__ == "__main__":
 
     # Get configuration file
     config_file = args["--config"]
+
+    # Check for output dir
+    output_dir = args["--output-dir"]
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
 
     # Build URL segments
     segments = []
@@ -163,5 +194,8 @@ if __name__ == "__main__":
     # Get output directory
     output_dir = args["--output-dir"]
 
+    # Get log flag
+    skip_logs = args["--skip-logs"]
+
     # Get data from Paddle
-    main(config_file, segments, output_dir)
+    main(config_file, segments, output_dir, skip_logs)
