@@ -2,27 +2,27 @@
 Fetch teuthology runs from paddles.
 
 Usage:
-    paddle.py --config=<cfg-file>
+    paddle.py --config=<cfg-file> --output-dir=<dir>
         [--user=<user>]
         [--branch=<branch>]
-        [--machine-type=<machine_type>]
+        [--machine-type=<machine-type>]
         [--suite=<suite>]
         [--status=<status>]
         [--date=<date>]
-        [--output=<file>]
 
 Options:
     --config=<cfg-file>           Path to the configuration file.
+    --output-dir=<dir>            Path to the output directory.
     --user=<user>                 Filter by user.
     --branch=<branch>             Filter by branch.
-    --machine-type=<machine_type> Filter by machine_type.
+    --machine-type=<machine-type> Filter by machine type.
     --suite=<suite>               Filter by suite.
     --status=<status>             Filter by status.
     --date=<date>                 Filter by date (YYYY-MM-DD).
-    --output=<file>               Path to the output file.
 """
 
 import json
+import os
 from datetime import datetime
 
 import requests
@@ -47,13 +47,20 @@ def get_data(url):
     """Fetch data from a URL"""
     response = requests.get(url)
     if response.status_code == 200:
-        return response.json()
+        ctype = response.headers.get("Content-Type", "").lower()
+        if ctype == "application/json":
+            return response.json()
+
+        elif ctype.startswith("text/plain"):
+            return response.text
+
+        else:
+            raise ValueError(f"Unexpected Content-Type : {ctype}")
 
     print(
         "Failed to fetch data from url. "
-        f"Status code: {response.status_code}"
+        f"Status code: {response.status_code} & Text:\n{response.text}"
     )
-    print(f"Response: {response.text}")
     raise ValueError("Failed to fetch data from url ...")
 
 
@@ -83,11 +90,45 @@ def get_jobs(runs):
     return jobs
 
 
-def write_json(_file, data):
+def get_logs(runs, output_dir):
+    """Fetch logs for the given teuthology jobs"""
+    for run in runs:
+        testrun_name = run.get("name")
+        testrun_dir = os.path.join(output_dir, testrun_name)
+        os.makedirs(testrun_dir, exist_ok=True)
+
+        print(f"Fetching logs for run: {testrun_name}")
+        for job in run.get("jobs", {}):
+            write_json(
+                os.path.join(testrun_dir, f"{job.get('job_id')}.json"), job
+            )
+
+            log_href, job_id = job.get("log_href"), job.get("job_id")
+            if log_href and job_id:
+                print(f"Fetching logs for job id: {job_id}")
+                write_logs(
+                    os.path.join(testrun_dir, f"{job_id}.log"),
+                    get_data(log_href),
+                )
+                continue
+
+            print(
+                "Warning: 'log_href' or 'job_id' key missing or empty for job"
+            )
+
+
+def write_logs(file_name, logs):
+    """Write logs to a file"""
+    print(f"Writing logs to {file_name}")
+    with open(file_name, "w") as f:
+        f.writelines(logs)
+
+
+def write_json(file_name, _json):
     """Write data to a JSON file"""
-    print(f"Writing data to {_file}")
-    with open(_file, "w") as f:
-        json.dump(data, f, indent=2)
+    print(f"Writing data to {file_name}")
+    with open(file_name, "w") as f:
+        json.dump(_json, f, indent=2)
 
 
 if __name__ == "__main__":
@@ -101,6 +142,11 @@ if __name__ == "__main__":
 
     # Get paddle base URL
     base_url = get_paddle_baseurl(args["--config"])
+
+    # Check for output dir
+    output_dir = args["--output-dir"]
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
 
     # Build URL segments
     segments = []
@@ -123,6 +169,8 @@ if __name__ == "__main__":
     # Fetch jobs for the given teuthology runs
     jobs = get_jobs(runs)
 
-    # Write jobs to output file
-    output = args["--output"]
-    write_json(output, jobs) if output else None
+    # Write jobs to JSON
+    write_json(os.path.join(output_dir, "testruns.json"), jobs)
+
+    # Fetch logs for the given teuthology jobs
+    get_logs(jobs, output_dir)
