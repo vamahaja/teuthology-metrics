@@ -5,7 +5,7 @@ Usage:
     paddle.py --config=<cfg-file>
         [--user=<user>]
         [--branch=<branch>]
-        [--machine_type=<machine_type>]
+        [--machine-type=<machine_type>]
         [--suite=<suite>]
         [--status=<status>]
         [--date=<date>]
@@ -15,7 +15,7 @@ Options:
     --config=<cfg-file>           Path to the configuration file.
     --user=<user>                 Filter by user.
     --branch=<branch>             Filter by branch.
-    --machine_type=<machine_type> Filter by machine_type.
+    --machine-type=<machine_type> Filter by machine_type.
     --suite=<suite>               Filter by suite.
     --status=<status>             Filter by status.
     --date=<date>                 Filter by date (YYYY-MM-DD).
@@ -108,8 +108,8 @@ if __name__ == "__main__":
         segments += ["user", args["--user"]]
     if args["--branch"]:
         segments += ["branch", args["--branch"]]
-    if args["--machine_type"]:
-        segments += ["machine_type", args["--machine_type"]]
+    if args["--machine-type"]:
+        segments += ["machine_type", args["--machine-type"]]
     if args["--suite"]:
         segments += ["suite", args["--suite"]]
     if args["--date"]:
