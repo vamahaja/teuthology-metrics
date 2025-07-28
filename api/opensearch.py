@@ -2,36 +2,55 @@
 Update job details to opensearch
 
 Usage:
-    opensearch.py --config=<cfg-file> --testruns=<json-file>
+    opensearch.py --config=<cfg-file> --testruns-dir=<dir>
 
 Options:
     --config=<cfg-file>     Path to the configuration file.
-    --testruns=<file>       Path to the test runs json file.
+    --testruns-dir=<dir>    Path to the test runs directory.
 """
 
 import json
+import os
 from datetime import datetime
 
 from docopt import docopt
 from opensearchpy import OpenSearch
 from utils import get_config
 
+INDEX_CONFIG = {
+    "runs": {
+        "name": "teuthology-runs",
+        "settings": {"index.mapping.total_fields.limit": 10000},
+    },
+    "jobs": {
+        "name": "teuthology-jobs",
+        "settings": {"index.mapping.total_fields.limit": 10000},
+    },
+}
 
-def get_opensearch_config(_config, server="opensearch"):
+
+def get_configs(_config, server="opensearch"):
     """Get OpenSearch configuration details"""
+    # Get OpenSearch configuration
     _config = get_config(_config, server)
+
+    # Get base URL
     base_url = f"http://{_config['host']}"
 
+    # Append port if specified
     if _config["port"]:
         base_url += f":{_config['port']}"
 
+    # Get baseurl, username and password
     return base_url, _config["username"], _config["password"]
 
 
-def connect_to_opensearch(config):
+def connect(config):
     """Connect to OpenSearch instance"""
-    base_url, username, password = get_opensearch_config(config, "opensearch")
+    # Get OpenSearch configuration
+    base_url, username, password = get_configs(config, "opensearch")
 
+    # Connect to OpenSearch
     print(f"Connecting to OpenSearch at {base_url} with user {username}")
     try:
         client = OpenSearch(
@@ -49,70 +68,115 @@ def connect_to_opensearch(config):
     return client
 
 
-def set_opensearch_client_configs(client):
-    """Set OpenSearch client configurations"""
-    # Set index mapping limits for jobs
-    client.indices.put_settings(
-        index="jobs", body={"index.mapping.total_fields.limit": 10000}
-    )
+def create_index(client, index_name):
+    """Create OpenSearch index"""
+    print(f"Creating new index: {index_name}")
+    if not client.indices.exists(index=index_name):
+        try:
+            client.indices.create(index=index_name)
+        except Exception as e:
+            print(f"Error creating index in OpenSearch: {e}")
+            raise e
 
-    # Set index mapping limits for runs
-    client.indices.put_settings(
-        index="runs", body={"index.mapping.total_fields.limit": 10000}
-    )
+        print(f"Created index: {index_name}")
+        return
 
-
-def get_testruns(_data):
-    """Get teuthology runs from the specified file"""
-    data = {}
-
-    print(f"Reading teuthology runs from {_data}")
-    with open(_data, "r") as f:
-        data = json.load(f)
-
-    if not data:
-        raise ValueError("No data found")
-
-    for runs in data:
-        if "name" not in runs:
-            raise ValueError("No runs found in the data")
-
-    return data
+    print(f"Index already present: {index_name}")
 
 
-def update_teuthology_runs(client, testruns):
-    """Update teuthology runs in OpenSearch"""
-    for testrun in testruns:
-        job_ids = []
-        for job in testrun.get("jobs", []):
-            print(f"Updating job: {job.get('job_id')}")
-            index_opensearch_record(client, "jobs", job.get("job_id"), job)
-            job_ids.append(job.get("job_id"))
+def set_index_config(client, index, settings):
+    """Set index configs"""
+    if not settings:
+        raise ValueError(f"No configs present for indice {index}")
+    print(f"Setting indice setting for {index}: {settings}")
 
-        testrun["jobs"] = job_ids
-
-        print(f"Updating testrun: {testrun.get('name')}")
-        index_opensearch_record(client, "runs", testrun.get("name"), testrun)
+    # Set index mapping limits for index
+    client.indices.put_settings(index=index, body=settings)
 
 
-def index_opensearch_record(client, index, id, body):
+def read_metadata(file_name):
+    """Read metadata from json"""
+    with open(file_name, "r") as _f:
+        return json.load(_f)
+
+
+def insert_jobs(client, runs, testrun_path):
+    """Insert teuthology jobs in Opensearch"""
+    for job_id in runs.get("job_ids", []):
+        print(f"Processing job id: {job_id}")
+
+        # Get job data
+        job_data = read_metadata(
+            f"{os.path.join(testrun_path, 'jobs', job_id)}.json"
+        )
+
+        # Update job data
+        _index = INDEX_CONFIG.get("jobs").get("name")
+        insert_record(client, _index, job_id, job_data)
+
+
+def insert_record(client, index, id, body):
     """Insert a document into OpenSearch"""
     print(f"Indexing document in OpenSearch: {index}/{id}")
+
+    # Insert the document in OpenSearch
     response = None
     try:
-        response = client.index(index=index, id=id, body=body)
+        response = client.index(index=index, id=id, body=body, refresh=True)
     except Exception as e:
         print(f"Error indexing document in OpenSearch: {e}")
-        raise
+        raise e
 
+    # Check if the response is successful
     if hasattr(response, "status_code") and response.status_code != 200:
         raise ValueError(f"Failed to index documents. Response:\n{response}")
 
 
+def update_runs(client, testruns_dir):
+    """Update teuthology runs in OpenSearch"""
+    for testruns in os.scandir(testruns_dir):
+        # Check for directory
+        if not testruns.is_dir():
+            continue
+
+        print(f"Processing testruns: {testruns.name}")
+
+        # Get job ids from meatadata
+        runs = read_metadata(os.path.join(testruns.path, "results.json"))
+
+        # Insert jobs to opensearch
+        insert_jobs(client, runs, testruns.path)
+
+        # Insert runs to openserach
+        _index = INDEX_CONFIG.get("runs").get("name")
+        insert_record(client, _index, runs.get("name"), runs)
+
+
+def main(config, testruns_dir):
+    # Connect to OpenSearch
+    client = connect(config)
+
+    for _index in INDEX_CONFIG:
+        index = INDEX_CONFIG.get(_index, {})
+        if not index:
+            raise ValueError(f"No config present for {index}")
+
+        # Create required index
+        create_index(client, index.get("name"))
+
+        # Set index config
+        set_index_config(client, index.get("name"), index.get("settings"))
+
+    # Update teuthology runs
+    update_runs(client, testruns_dir)
+
+
 if __name__ == "__main__":
     print(
-        "\n===== Starting new opensearch session - "
-        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ====="
+        "\n======== "
+        "Starting new OpenSearch session - "
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        " ======== "
     )
 
     # Parse command line arguments
@@ -120,12 +184,7 @@ if __name__ == "__main__":
 
     # Get configuration and data
     config = args["--config"]
-    testruns = get_testruns(args["--testruns"])
+    testruns_dir = args["--testruns-dir"]
 
-    # Connect to OpenSearch
-    client = connect_to_opensearch(config)
-
-    set_opensearch_client_configs(client)
-
-    # Update teuthology runs
-    update_teuthology_runs(client, testruns)
+    # Update OpenSearch data
+    main(config, testruns_dir)

@@ -2,27 +2,27 @@
 Fetch teuthology runs from paddles.
 
 Usage:
-    paddle.py --config=<cfg-file>
+    paddle.py --config=<cfg-file> --output-dir=<dir>
         [--user=<user>]
         [--branch=<branch>]
         [--machine-type=<machine_type>]
         [--suite=<suite>]
         [--status=<status>]
         [--date=<date>]
-        [--output=<file>]
 
 Options:
     --config=<cfg-file>           Path to the configuration file.
+    --output-dir=<dir>            Path to the output directory.
     --user=<user>                 Filter by user.
     --branch=<branch>             Filter by branch.
     --machine-type=<machine_type> Filter by machine_type.
     --suite=<suite>               Filter by suite.
     --status=<status>             Filter by status.
     --date=<date>                 Filter by date (YYYY-MM-DD).
-    --output=<file>               Path to the output file.
 """
 
 import json
+import os
 from datetime import datetime
 
 import requests
@@ -45,49 +45,92 @@ def get_paddle_baseurl(_config, server="paddle"):
 
 def get_data(url):
     """Fetch data from a URL"""
+    # Get the data from the URL
     response = requests.get(url)
+
+    # Validate the response
     if response.status_code == 200:
-        return response.json()
+        # Check response content type
+        ctype = response.headers.get("Content-Type", "").lower()
+        if ctype == "application/json":
+            return response.json()
+
+        else:
+            raise ValueError(f"Unexpected Content-Type : {ctype}")
 
     print(
         "Failed to fetch data from url. "
-        f"Status code: {response.status_code}"
+        f"Status code: {response.status_code} & Text:\n{response.text}"
     )
-    print(f"Response: {response.text}")
-    raise ValueError("Failed to fetch data from url ...")
+    raise ValueError(f"Failed to fetch data from url - {url}")
 
 
 def get_runs(base_url, segments):
     """Fetch teuthology runs from Paddle."""
     print(f"Requesting test runs: {segments}")
+
+    # Construct the URL for fetching runs
     endpoint = "/".join(segments) if segments else ""
+
+    # construct the URL
     url = requests.utils.requote_uri(f"{base_url}/runs/{endpoint}")
 
+    # Fetch data from the constructed URL
     return get_data(url)
 
 
-def get_jobs(runs):
-    """Fetch jobs for the given teuthology runs"""
-    jobs = []
-    for run in runs:
-        hrefs = run.get("href")
-        if hrefs and isinstance(hrefs, list) and len(hrefs) > 0:
-            print(f"Fetching jobs for run: {run.get('name')}")
-            jobs.append(get_data(hrefs[0]))
-            continue
+def get_jobs(run, output_dir):
+    """Fetch jobs for the given teuthology run"""
+    hrefs, job_ids = run.get("href"), []
 
-        print(
-            f"Warning: 'href' key missing or empty for run: {run.get('name')}"
-        )
+    # Check if hrefs is a list and has elements
+    if hrefs and isinstance(hrefs, list) and len(hrefs) > 0:
+        print(f"Fetching jobs for run: {run.get('name')}")
+        for job in get_data(hrefs[0]).get("jobs", []):
+            print(f"Processing job: {job.get('job_id')}")
 
-    return jobs
+            # Update job id list
+            job_ids.append(job.get("job_id"))
+
+            # Create output directory with job_id name
+            run_dir = os.path.join(output_dir, f"{job.get('job_id')}.json")
+            write_job_metadata(run_dir, job)
+
+        return job_ids
+
+    print(f"Warning: 'href' key missing or empty for run: {run.get('name')}")
+    return []
 
 
-def write_json(_file, data):
+def write_job_metadata(_file, metadata):
     """Write data to a JSON file"""
     print(f"Writing data to {_file}")
-    with open(_file, "w") as f:
-        json.dump(data, f, indent=2)
+
+    # Open the file and write the metadata
+    with open(_file, "w") as _f:
+        json.dump(metadata, _f, indent=2)
+
+
+def main(config_file, segments, output_dir):
+    # Get paddle base URL
+    base_url = get_paddle_baseurl(config_file)
+
+    # Fetch jobs for the given teuthology runs
+    for run in get_runs(base_url, segments):
+        print(f"Processing run: {run.get('name')}")
+
+        # Create output directory with run name
+        run_dir = os.path.join(output_dir, run.get("name"))
+        os.makedirs(run_dir, exist_ok=True)
+
+        jobs_dir = os.path.join(run_dir, "jobs")
+        os.makedirs(jobs_dir, exist_ok=True)
+
+        # Get jobs for the run
+        run["job_ids"] = get_jobs(run, jobs_dir)
+
+        # Write jobs to output directory
+        write_job_metadata(os.path.join(run_dir, "results.json"), run)
 
 
 if __name__ == "__main__":
@@ -99,8 +142,8 @@ if __name__ == "__main__":
     # Parse command line arguments
     args = docopt(__doc__)
 
-    # Get paddle base URL
-    base_url = get_paddle_baseurl(args["--config"])
+    # Get configuration file
+    config_file = args["--config"]
 
     # Build URL segments
     segments = []
@@ -117,12 +160,8 @@ if __name__ == "__main__":
     if args["--status"]:
         segments += ["status", args["--status"]]
 
-    # Fetch teuthology runs
-    runs = get_runs(base_url, segments)
+    # Get output directory
+    output_dir = args["--output-dir"]
 
-    # Fetch jobs for the given teuthology runs
-    jobs = get_jobs(runs)
-
-    # Write jobs to output file
-    output = args["--output"]
-    write_json(output, jobs) if output else None
+    # Get data from Paddle
+    main(config_file, segments, output_dir)
