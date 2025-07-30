@@ -20,11 +20,21 @@ from utils import get_config
 INDEX_CONFIG = {
     "runs": {
         "name": "teuthology-runs",
-        "settings": {"index.mapping.total_fields.limit": 10000},
+        "body": {
+            "settings": {
+                "index.mapping.total_fields.limit": 10000,
+                "index.mapping.ignore_malformed": True,
+            },
+        },
     },
     "jobs": {
         "name": "teuthology-jobs",
-        "settings": {"index.mapping.total_fields.limit": 10000},
+        "body": {
+            "settings": {
+                "index.mapping.total_fields.limit": 10000,
+                "index.mapping.ignore_malformed": True,
+            },
+        },
     },
 }
 
@@ -60,6 +70,9 @@ def connect(config):
             verify_certs=False,
             ssl_assert_hostname=False,
             ssl_show_warn=False,
+            retry_on_timeout=True,
+            max_retries=5,
+            timeout=180,
         )
     except Exception as e:
         print(f"Failed to connect to OpenSearch: {e}")
@@ -68,12 +81,12 @@ def connect(config):
     return client
 
 
-def create_index(client, index_name):
+def create_index(client, index_name, body):
     """Create OpenSearch index"""
     print(f"Creating new index: {index_name}")
     if not client.indices.exists(index=index_name):
         try:
-            client.indices.create(index=index_name)
+            client.indices.create(index=index_name, body=body)
         except Exception as e:
             print(f"Error creating index in OpenSearch: {e}")
             raise e
@@ -82,16 +95,6 @@ def create_index(client, index_name):
         return
 
     print(f"Index already present: {index_name}")
-
-
-def set_index_config(client, index, settings):
-    """Set index configs"""
-    if not settings:
-        raise ValueError(f"No configs present for indice {index}")
-    print(f"Setting indice setting for {index}: {settings}")
-
-    # Set index mapping limits for index
-    client.indices.put_settings(index=index, body=settings)
 
 
 def read_metadata(file_name):
@@ -112,7 +115,10 @@ def insert_jobs(client, runs, testrun_path):
 
         # Update job data
         _index = INDEX_CONFIG.get("jobs").get("name")
-        insert_record(client, _index, job_id, job_data)
+        try:
+            insert_record(client, _index, job_id, job_data)
+        except Exception as e:
+            print(f"Error: Failed to insert job {job_id}")
 
 
 def insert_record(client, index, id, body):
@@ -162,10 +168,7 @@ def main(config, testruns_dir):
             raise ValueError(f"No config present for {index}")
 
         # Create required index
-        create_index(client, index.get("name"))
-
-        # Set index config
-        set_index_config(client, index.get("name"), index.get("settings"))
+        create_index(client, index.get("name"), index.get("body"))
 
     # Update teuthology runs
     update_runs(client, testruns_dir)
