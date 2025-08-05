@@ -9,6 +9,7 @@ Usage:
         [--suite=<suite>]
         [--status=<status>]
         [--date=<date>]
+        [--skip-pass-logs]
         [--skip-logs]
 
 Options:
@@ -20,6 +21,7 @@ Options:
     --suite=<suite>               Filter by suite.
     --status=<status>             Filter by status.
     --date=<date>                 Filter by date (YYYY-MM-DD).
+    --skip-pass-logs              Skip logs for passed tests.
     --skip-logs                   Skip job logs.
 """
 
@@ -83,7 +85,7 @@ def get_runs(base_url, segments):
     return get_data(url)
 
 
-def get_jobs(run, jobs_dir, logs_dir):
+def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
     """Fetch jobs for the given teuthology run"""
     hrefs, job_ids = run.get("href"), []
 
@@ -103,7 +105,7 @@ def get_jobs(run, jobs_dir, logs_dir):
             job_path = os.path.join(jobs_dir, f"{job_id}.json")
             write_job_metadata(job_path, job)
 
-            if logs_dir:
+            if logs_dir and (skip_pass_logs and job.get("status") == "fail"):
                 # Write job id logs
                 log_path = os.path.join(logs_dir, f"{job_id}.log")
                 write_job_logs(log_path, get_data(log_href))
@@ -114,7 +116,7 @@ def get_jobs(run, jobs_dir, logs_dir):
     return []
 
 
-def main(config_file, segments, output_dir, skip_logs):
+def main(config_file, segments, output_dir, skip_pass_logs, skip_logs):
     # Get paddle base URL
     base_url = get_paddle_baseurl(config_file)
 
@@ -135,7 +137,7 @@ def main(config_file, segments, output_dir, skip_logs):
             os.makedirs(logs_dir, exist_ok=True)
 
         # Get jobs for the run
-        run["job_ids"] = get_jobs(run, jobs_dir, logs_dir)
+        run["job_ids"] = get_jobs(run, jobs_dir, logs_dir, skip_pass_logs)
 
         # Write jobs to output directory
         write_job_metadata(os.path.join(run_dir, "results.json"), run)
@@ -196,6 +198,7 @@ if __name__ == "__main__":
 
     # Get log flag
     skip_logs = args["--skip-logs"]
+    skip_pass_logs = args["--skip-pass-logs"]
 
     # Get data from Paddle
-    main(config_file, segments, output_dir, skip_logs)
+    main(config_file, segments, output_dir, skip_pass_logs, skip_logs)
