@@ -3,11 +3,13 @@ Update job details to opensearch
 
 Usage:
     opensearch.py --config=<cfg-file> --testruns-dir=<dir>
+        [--skip-pass-logs]
         [--skip-logs]
 
 Options:
     --config=<cfg-file>     Path to the configuration file.
     --testruns-dir=<dir>    Path to the test runs directory.
+    --skip-pass-logs        Skip logs for passed tests.
     --skip-logs             Skip job logs.
 """
 
@@ -114,7 +116,7 @@ def read_metadata(file_name):
         return json.load(_f)
 
 
-def insert_jobs(client, runs, testrun_path, skip_logs):
+def insert_jobs(client, runs, testrun_path, skip_logs, skip_pass_logs):
     """Insert teuthology jobs in Opensearch"""
     for job_id in runs.get("job_ids", []):
         print(f"Processing job id: {job_id}")
@@ -128,10 +130,13 @@ def insert_jobs(client, runs, testrun_path, skip_logs):
         _index = INDEX_CONFIG.get("jobs").get("name")
         try:
             insert_record(client, _index, job_id, job_data)
-        except Exception:
-            print(f"Error: Failed to insert job job-id {job_id}")
+        except Exception as e:
+            print(
+                f"Error: Failed to insert job job-id {job_id} "
+                f"with error\n{str(e)}"
+            )
 
-        if skip_logs:
+        if skip_logs or (skip_pass_logs and job_data.get("status") == "pass"):
             continue
 
         # Get log file path
@@ -141,8 +146,11 @@ def insert_jobs(client, runs, testrun_path, skip_logs):
         _index = INDEX_CONFIG.get("logs").get("name")
         try:
             insert_logs(client, _index, job_id, log_file)
-        except Exception:
-            print(f"Error: Failed to insert logs for job-id {job_id}")
+        except Exception as e:
+            print(
+                f"Error: Failed to insert logs for job-id {job_id} "
+                f"with error\n{str(e)}"
+            )
 
 
 def insert_logs(client, index, id, log_file):
@@ -187,7 +195,7 @@ def insert_logs(client, index, id, log_file):
             batch_index += 1
 
 
-def update_runs(client, testruns_dir, skip_logs):
+def update_runs(client, testruns_dir, skip_logs, skip_pass_logs):
     """Update teuthology runs in OpenSearch"""
     for testruns in os.scandir(testruns_dir):
         # Check for directory
@@ -200,7 +208,7 @@ def update_runs(client, testruns_dir, skip_logs):
         runs = read_metadata(os.path.join(testruns.path, "results.json"))
 
         # Insert jobs to opensearch
-        insert_jobs(client, runs, testruns.path, skip_logs)
+        insert_jobs(client, runs, testruns.path, skip_logs, skip_pass_logs)
 
         # Insert runs to openserach
         _index = INDEX_CONFIG.get("runs").get("name")
@@ -224,7 +232,7 @@ def insert_record(client, index, id, body):
         raise ValueError(f"Failed to index documents. Response:\n{response}")
 
 
-def main(config, testruns_dir, skip_logs):
+def main(config, testruns_dir, skip_logs, skip_pass_logs):
     # Connect to OpenSearch
     client = connect(config)
 
@@ -237,7 +245,7 @@ def main(config, testruns_dir, skip_logs):
         create_index(client, index.get("name"), index.get("body"))
 
     # Update teuthology runs
-    update_runs(client, testruns_dir, skip_logs)
+    update_runs(client, testruns_dir, skip_logs, skip_pass_logs)
 
 
 if __name__ == "__main__":
@@ -257,6 +265,7 @@ if __name__ == "__main__":
 
     # Get log flag
     skip_logs = args["--skip-logs"]
+    skip_pass_logs = args["--skip-pass-logs"]
 
     # Update OpenSearch data
-    main(config, testruns_dir, skip_logs)
+    main(config, testruns_dir, skip_logs, skip_pass_logs)
