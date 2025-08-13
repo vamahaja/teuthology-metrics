@@ -1,12 +1,11 @@
 import configparser
 import os
 
+from drain3.masking import MaskingInstruction
+from drain3.template_miner_config import TemplateMinerConfig
 
-def get_config(_file, server):
-    """Get configuration details"""
-    # Initialize config dictionary
-    _config = {}
 
+def read_config(_file):
     # Check if the config file exists
     if not os.path.isfile(_file):
         raise FileNotFoundError(f"Config file '{_file}' not found.")
@@ -19,6 +18,14 @@ def get_config(_file, server):
         config.read(_file)
     except Exception as e:
         raise RuntimeError(f"Failed to read config file '{_file}': {e}")
+
+    return config
+
+
+def get_config(_file, server):
+    """Get configuration details"""
+    # Read the config file
+    _config, config = {}, read_config(_file)
 
     # Check if the server details exists
     if server not in config:
@@ -44,3 +51,76 @@ def get_config(_file, server):
             )
 
     return _config
+
+
+def get_snapshot_file(_file):
+    """Get snapshot file from the config file."""
+    # Read the config file
+    config = read_config(_file)
+
+    # Check if the 'drain3' section exists
+    if "drain3" not in config:
+        raise ValueError("Section 'drain3' not found in configuration file.")
+
+    # Check if snapshot location and filename are provided
+    _config = config["drain3"]
+    if not (
+        _config.get("snapshot_location") and _config.get("snapshot_filename")
+    ):
+        raise ValueError(
+            "Snapshot location and filename "
+            "not found in 'drain3' configuration file."
+        )
+
+    # Construct the file path for persistence
+    file_path = os.path.join(
+        _config.get("snapshot_location"), _config.get("snapshot_filename")
+    )
+
+    return file_path
+
+
+def get_miner_config():
+    """Creates and returns a drain3 configuration object."""
+    # Initialize the configuration for the TemplateMiner
+    config = TemplateMinerConfig()
+
+    # The similarity threshold for grouping log messages.
+    config.drain_sim_th = 0.8
+
+    # The depth of the parsing tree.
+    config.drain_depth = 4
+
+    # Set snaopshot compression state to False.
+    config.snapshot_compress_state = False
+
+    # Masking is crucial for identifying dynamic variables within log messages.
+    config.masking_instructions = [
+        # Mask timestamps
+        MaskingInstruction(
+            pattern=r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}[+-]\d{4}",
+            mask_with="TIMESTAMP",
+        ),
+        # Mask smithi nodes
+        MaskingInstruction(pattern=r"smithi\d+", mask_with="SMITHI*"),
+        # Mask mon services
+        MaskingInstruction(pattern=r"mon\.[A-Za-z0-9]+", mask_with="MON*"),
+        # Mask osd services
+        MaskingInstruction(pattern=r"osd\.[A-Za-z0-9]+", mask_with="OSD*"),
+        # Mask osd service count
+        MaskingInstruction(pattern=r"\d{1,} OSD\(s\)", mask_with="OSD_COUNT"),
+        # Mask PG service count
+        MaskingInstruction(pattern=r"\d{1,} (pg|PG)", mask_with="PG_COUNT"),
+        # Mask osd & host down counts
+        MaskingInstruction(
+            pattern=r"\d{1,} host \(\d{1,} osds\)",
+            mask_with="OSD_HOST_DOWN_COUNT",
+        ),
+        # Mask cluster addresses
+        MaskingInstruction(
+            pattern=r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,}\/\d{1,}",
+            mask_with="CLUSTER_ADDRESS",
+        ),
+    ]
+
+    return config

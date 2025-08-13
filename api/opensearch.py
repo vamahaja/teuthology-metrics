@@ -1,16 +1,18 @@
 """
-Update job details to opensearch
+Update job details in OpenSearch.
 
 Usage:
     opensearch.py --config=<cfg-file> --testruns-dir=<dir>
-        [--skip-pass-logs]
-        [--skip-logs]
+                  [--skip-drain3-templates]
+                  [--skip-pass-logs]
+                  [--skip-logs]
 
 Options:
-    --config=<cfg-file>     Path to the configuration file.
-    --testruns-dir=<dir>    Path to the test runs directory.
-    --skip-pass-logs        Skip logs for passed tests.
-    --skip-logs             Skip job logs.
+    --config=<cfg-file>         Path to the configuration file.
+    --testruns-dir=<dir>        Path to the test runs directory.
+    --skip-drain3-templates     Skip processing Drain3 templates.
+    --skip-pass-logs            Skip logs for passed tests.
+    --skip-logs                 Skip job logs entirely.
 """
 
 import json
@@ -18,8 +20,10 @@ import os
 from datetime import datetime
 
 from docopt import docopt
+from drain3 import TemplateMiner
+from drain3.file_persistence import FilePersistence
 from opensearchpy import OpenSearch, helpers
-from utils import get_config
+from utils import get_config, get_miner_config, get_snapshot_file
 
 INDEX_CONFIG = {
     "runs": {
@@ -66,6 +70,23 @@ def get_configs(_config, server="opensearch"):
 
     # Get baseurl, username and password
     return base_url, _config["username"], _config["password"]
+
+
+def get_template_miner(config):
+    """Get Drain3 template miner instance"""
+    file_path = get_snapshot_file(config)
+
+    # Create persistence handler
+    persistence_handler = None
+    if not os.path.exists(file_path):
+        persistence_handler = FilePersistence(file_path=file_path)
+
+    # Get template miner config
+    template_miner = TemplateMiner(
+        config=get_miner_config(), persistence_handler=persistence_handler
+    )
+
+    return template_miner
 
 
 def connect(config):
@@ -116,7 +137,9 @@ def read_metadata(file_name):
         return json.load(_f)
 
 
-def insert_jobs(client, runs, testrun_path, skip_logs, skip_pass_logs):
+def insert_jobs(
+    client, runs, testrun_path, skip_logs, skip_pass_logs, template_miner
+):
     """Insert teuthology jobs in Opensearch"""
     for job_id in runs.get("job_ids", []):
         print(f"Processing job id: {job_id}")
@@ -135,6 +158,20 @@ def insert_jobs(client, runs, testrun_path, skip_logs, skip_pass_logs):
                 f"Error: Failed to insert job job-id {job_id} "
                 f"with error\n{str(e)}"
             )
+
+        # Update template miner with failure_reason
+        if template_miner and job_data.get("failure_reason"):
+            print(
+                f"Adding failure reason for job-id {job_id} "
+                f"to template miner"
+            )
+            result = template_miner.add_log_message(
+                job_data.get("failure_reason")
+            )
+            print("Template miner result: ")
+            print(f"\tcluster_id : {result.get('cluster_id')}")
+            print(f"\ttemplate_mined : {result.get('template_mined')}")
+            print(f"\tfailure_reason : {job_data.get('failure_reason')}")
 
         if skip_logs or (skip_pass_logs and job_data.get("status") == "pass"):
             continue
@@ -195,7 +232,9 @@ def insert_logs(client, index, id, log_file):
             batch_index += 1
 
 
-def update_runs(client, testruns_dir, skip_logs, skip_pass_logs):
+def update_runs(
+    client, testruns_dir, skip_logs, skip_pass_logs, template_miner
+):
     """Update teuthology runs in OpenSearch"""
     for testruns in os.scandir(testruns_dir):
         # Check for directory
@@ -208,7 +247,14 @@ def update_runs(client, testruns_dir, skip_logs, skip_pass_logs):
         runs = read_metadata(os.path.join(testruns.path, "results.json"))
 
         # Insert jobs to opensearch
-        insert_jobs(client, runs, testruns.path, skip_logs, skip_pass_logs)
+        insert_jobs(
+            client,
+            runs,
+            testruns.path,
+            skip_logs,
+            skip_pass_logs,
+            template_miner,
+        )
 
         # Insert runs to openserach
         _index = INDEX_CONFIG.get("runs").get("name")
@@ -232,7 +278,7 @@ def insert_record(client, index, id, body):
         raise ValueError(f"Failed to index documents. Response:\n{response}")
 
 
-def main(config, testruns_dir, skip_logs, skip_pass_logs):
+def main(config, testruns_dir, skip_logs, skip_pass_logs, template_miner):
     # Connect to OpenSearch
     client = connect(config)
 
@@ -245,7 +291,9 @@ def main(config, testruns_dir, skip_logs, skip_pass_logs):
         create_index(client, index.get("name"), index.get("body"))
 
     # Update teuthology runs
-    update_runs(client, testruns_dir, skip_logs, skip_pass_logs)
+    update_runs(
+        client, testruns_dir, skip_logs, skip_pass_logs, template_miner
+    )
 
 
 if __name__ == "__main__":
@@ -267,5 +315,10 @@ if __name__ == "__main__":
     skip_logs = args["--skip-logs"]
     skip_pass_logs = args["--skip-pass-logs"]
 
+    # Get Drain3 templates flag
+    template_miner = None
+    if not args["--skip-drain3-templates"]:
+        template_miner = get_template_miner(config)
+
     # Update OpenSearch data
-    main(config, testruns_dir, skip_logs, skip_pass_logs)
+    main(config, testruns_dir, skip_logs, skip_pass_logs, template_miner)
