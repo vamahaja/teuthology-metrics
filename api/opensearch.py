@@ -53,6 +53,15 @@ INDEX_CONFIG = {
             },
         },
     },
+    "patterns": {
+        "name": "teuthology-patterns",
+        "body": {
+            "settings": {
+                "index.mapping.total_fields.limit": 100,
+                "index.mapping.ignore_malformed": True,
+            },
+        },
+    },
 }
 
 
@@ -137,10 +146,35 @@ def read_metadata(file_name):
         return json.load(_f)
 
 
+def insert_failure_template(client, message, template_miner):
+    # Add failure reason to template miner
+    failure_template = template_miner.add_log_message(message)
+
+    # Insert failure template in patterns index
+    print(
+        "Inserting failure template for cluster id "
+        f"{failure_template.get('cluster_id')} in OpenSearch"
+    )
+    try:
+        insert_record(
+            client,
+            INDEX_CONFIG.get("patterns").get("name"),
+            failure_template.get("cluster_id"),
+            {"failure_template": failure_template},
+        )
+    except Exception as e:
+        print(
+            f"Error: Failed to insert failure template for cluster id "
+            f"{failure_template.get('cluster_id')} with error\n{str(e)}"
+        )
+
+    return failure_template
+
+
 def insert_jobs(
     client, runs, testrun_path, skip_logs, skip_pass_logs, template_miner
 ):
-    """Insert teuthology jobs in Opensearch"""
+    """Insert teuthology jobs in OpenSearch"""
     for job_id in runs.get("job_ids", []):
         print(f"Processing job id: {job_id}")
 
@@ -152,11 +186,10 @@ def insert_jobs(
         # Update template miner with failure_reason
         if template_miner and job_data.get("failure_reason"):
             print(
-                f"Adding failure reason for job-id {job_id} "
-                f"to template miner"
+                f"Adding failure reason for job-id {job_id} to template miner"
             )
-            job_data["failure_template"] = template_miner.add_log_message(
-                job_data.get("failure_reason")
+            job_data["failure_template"] = insert_failure_template(
+                client, job_data.get("failure_reason"), template_miner
             )
 
         # Update job data
