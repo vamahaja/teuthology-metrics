@@ -149,6 +149,16 @@ def insert_jobs(
             f"{os.path.join(testrun_path, 'jobs', job_id)}.json"
         )
 
+        # Update template miner with failure_reason
+        if template_miner and job_data.get("failure_reason"):
+            print(
+                f"Adding failure reason for job-id {job_id} "
+                f"to template miner"
+            )
+            job_data["failure_template"] = template_miner.add_log_message(
+                job_data.get("failure_reason")
+            )
+
         # Update job data
         _index = INDEX_CONFIG.get("jobs").get("name")
         try:
@@ -158,20 +168,6 @@ def insert_jobs(
                 f"Error: Failed to insert job job-id {job_id} "
                 f"with error\n{str(e)}"
             )
-
-        # Update template miner with failure_reason
-        if template_miner and job_data.get("failure_reason"):
-            print(
-                f"Adding failure reason for job-id {job_id} "
-                f"to template miner"
-            )
-            result = template_miner.add_log_message(
-                job_data.get("failure_reason")
-            )
-            print("Template miner result: ")
-            print(f"\tcluster_id : {result.get('cluster_id')}")
-            print(f"\ttemplate_mined : {result.get('template_mined')}")
-            print(f"\tfailure_reason : {job_data.get('failure_reason')}")
 
         if skip_logs or (skip_pass_logs and job_data.get("status") == "pass"):
             continue
