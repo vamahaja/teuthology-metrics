@@ -2,7 +2,7 @@
 Update job details in OpenSearch.
 
 Usage:
-    opensearch.py --config=<cfg-file> --testruns-dir=<dir>
+    api/opensearch.py --config=<cfg-file> --testruns-dir=<dir>
                   [--skip-drain3-templates]
                   [--skip-pass-logs]
                   [--skip-logs]
@@ -15,7 +15,6 @@ Options:
     --skip-logs                 Skip job logs entirely.
 """
 
-import json
 import os
 from datetime import datetime
 
@@ -23,7 +22,14 @@ from docopt import docopt
 from drain3 import TemplateMiner
 from drain3.file_persistence import FilePersistence
 from opensearchpy import OpenSearch, helpers
-from utils import get_config, get_miner_config, get_snapshot_file
+
+from .utils import (
+    batchify,
+    get_config,
+    get_miner_config,
+    get_snapshot_file,
+    read_json,
+)
 
 INDEX_CONFIG = {
     "runs": {
@@ -140,10 +146,36 @@ def create_index(client, index_name, body):
     print(f"Index already present: {index_name}")
 
 
-def read_metadata(file_name):
-    """Read metadata from json"""
-    with open(file_name, "r") as _f:
-        return json.load(_f)
+def setup_opensearch(config):
+    # Connect to OpenSearch
+    client = connect(config)
+
+    for _index in INDEX_CONFIG:
+        index = INDEX_CONFIG.get(_index, {})
+        if not index:
+            raise ValueError(f"No config present for {index}")
+
+        # Create required index
+        create_index(client, index.get("name"), index.get("body"))
+
+    return client
+
+
+def insert_record(client, index, id, body):
+    """Insert a document into OpenSearch"""
+    print(f"Indexing document in OpenSearch: {index}/{id}")
+
+    # Insert the document in OpenSearch
+    response = None
+    try:
+        response = client.index(index=index, id=id, body=body, refresh=True)
+    except Exception as e:
+        print(f"Error indexing document in OpenSearch: {e}")
+        raise e
+
+    # Check if the response is successful
+    if hasattr(response, "status_code") and response.status_code != 200:
+        raise ValueError(f"Failed to index documents. Response:\n{response}")
 
 
 def insert_failure_template(client, message, template_miner):
@@ -171,6 +203,41 @@ def insert_failure_template(client, message, template_miner):
     return failure_template
 
 
+def insert_job(client, job_id, job_data):
+    """Insert a teuthology job in OpenSearch"""
+    # Update job data
+    _index = INDEX_CONFIG.get("jobs").get("name")
+    try:
+        insert_record(client, _index, job_id, job_data)
+    except Exception as e:
+        print(
+            f"Error: Failed to insert job job-id {job_id} "
+            f"with error\n{str(e)}"
+        )
+
+
+def insert_log(client, job_id, log_file):
+    """Insert a teuthology job log in OpenSearch"""
+    _index = INDEX_CONFIG.get("logs").get("name")
+    try:
+        insert_logs(client, _index, job_id, log_file)
+    except Exception as e:
+        print(
+            f"Error: Failed to insert logs for job-id {job_id} "
+            f"with error\n{str(e)}"
+        )
+
+
+def insert_run(client, name, run_data):
+    """Insert a teuthology run in OpenSearch"""
+    # Insert runs to openserach
+    _index = INDEX_CONFIG.get("runs").get("name")
+    try:
+        insert_record(client, _index, name, run_data)
+    except Exception as e:
+        print(f"Error: Failed to insert run for {name} with error\n{str(e)}")
+
+
 def insert_jobs(
     client, runs, testrun_path, skip_logs, skip_pass_logs, template_miner
 ):
@@ -179,7 +246,7 @@ def insert_jobs(
         print(f"Processing job id: {job_id}")
 
         # Get job data
-        job_data = read_metadata(
+        job_data = read_json(
             f"{os.path.join(testrun_path, 'jobs', job_id)}.json"
         )
 
@@ -192,15 +259,8 @@ def insert_jobs(
                 client, job_data.get("failure_reason"), template_miner
             )
 
-        # Update job data
-        _index = INDEX_CONFIG.get("jobs").get("name")
-        try:
-            insert_record(client, _index, job_id, job_data)
-        except Exception as e:
-            print(
-                f"Error: Failed to insert job job-id {job_id} "
-                f"with error\n{str(e)}"
-            )
+        # Insert job in OpenSearch
+        insert_job(client, job_id, job_data)
 
         if skip_logs or (skip_pass_logs and job_data.get("status") == "pass"):
             continue
@@ -209,31 +269,13 @@ def insert_jobs(
         log_file = f"{os.path.join(testrun_path, 'logs', job_id)}.log"
 
         # Update job logs
-        _index = INDEX_CONFIG.get("logs").get("name")
-        try:
-            insert_logs(client, _index, job_id, log_file)
-        except Exception as e:
-            print(
-                f"Error: Failed to insert logs for job-id {job_id} "
-                f"with error\n{str(e)}"
-            )
+        insert_log(client, job_id, log_file)
 
 
 def insert_logs(client, index, id, log_file):
     """Insert logs into OpenSearch"""
     print(f"Indexing logs in OpenSearch: {index}/{id}")
     batch_size, batch_index = 1000, 0
-
-    # Iterate over log file for given batch size
-    def batchify(iterable, batch_size=batch_size):
-        batch = []
-        for item in iterable:
-            batch.append(item)
-            if len(batch) == batch_size:
-                yield batch
-                batch = []
-        if batch:
-            yield batch
 
     # Open log file and start update logs
     with open(log_file, "r", encoding="utf-8") as f:
@@ -261,9 +303,28 @@ def insert_logs(client, index, id, log_file):
             batch_index += 1
 
 
-def update_runs(
-    client, testruns_dir, skip_logs, skip_pass_logs, template_miner
+def insert_runs(
+    client, testruns_path, skip_logs, skip_pass_logs, template_miner
 ):
+    """Insert teuthology runs in OpenSearch"""
+    # Get test runs from metadata
+    runs = read_json(os.path.join(testruns_path, "results.json"))
+
+    # Insert jobs to opensearch
+    insert_jobs(
+        client,
+        runs,
+        testruns_path,
+        skip_logs,
+        skip_pass_logs,
+        template_miner,
+    )
+
+    # Insert run to OpenSearch
+    insert_run(client, runs.get("name"), runs)
+
+
+def main(client, testruns_dir, skip_logs, skip_pass_logs, template_miner):
     """Update teuthology runs in OpenSearch"""
     for testruns in os.scandir(testruns_dir):
         # Check for directory
@@ -272,57 +333,14 @@ def update_runs(
 
         print(f"Processing testruns: {testruns.name}")
 
-        # Get job ids from meatadata
-        runs = read_metadata(os.path.join(testruns.path, "results.json"))
-
-        # Insert jobs to opensearch
-        insert_jobs(
+        # Update test runs to OpenSearch
+        insert_runs(
             client,
-            runs,
             testruns.path,
             skip_logs,
             skip_pass_logs,
             template_miner,
         )
-
-        # Insert runs to openserach
-        _index = INDEX_CONFIG.get("runs").get("name")
-        insert_record(client, _index, runs.get("name"), runs)
-
-
-def insert_record(client, index, id, body):
-    """Insert a document into OpenSearch"""
-    print(f"Indexing document in OpenSearch: {index}/{id}")
-
-    # Insert the document in OpenSearch
-    response = None
-    try:
-        response = client.index(index=index, id=id, body=body, refresh=True)
-    except Exception as e:
-        print(f"Error indexing document in OpenSearch: {e}")
-        raise e
-
-    # Check if the response is successful
-    if hasattr(response, "status_code") and response.status_code != 200:
-        raise ValueError(f"Failed to index documents. Response:\n{response}")
-
-
-def main(config, testruns_dir, skip_logs, skip_pass_logs, template_miner):
-    # Connect to OpenSearch
-    client = connect(config)
-
-    for _index in INDEX_CONFIG:
-        index = INDEX_CONFIG.get(_index, {})
-        if not index:
-            raise ValueError(f"No config present for {index}")
-
-        # Create required index
-        create_index(client, index.get("name"), index.get("body"))
-
-    # Update teuthology runs
-    update_runs(
-        client, testruns_dir, skip_logs, skip_pass_logs, template_miner
-    )
 
 
 if __name__ == "__main__":
@@ -349,5 +367,8 @@ if __name__ == "__main__":
     if not args["--skip-drain3-templates"]:
         template_miner = get_template_miner(config)
 
+    # Setup OpenSearch
+    client = setup_opensearch(config)
+
     # Update OpenSearch data
-    main(config, testruns_dir, skip_logs, skip_pass_logs, template_miner)
+    main(client, testruns_dir, skip_logs, skip_pass_logs, template_miner)
