@@ -1,35 +1,6 @@
-"""
-Fetch teuthology runs from paddles.
-
-Usage:
-    api/paddle.py --config=<cfg-file> --output-dir=<dir>
-        [--user=<user>]
-        [--branch=<branch>]
-        [--machine-type=<machine_type>]
-        [--suite=<suite>]
-        [--status=<status>]
-        [--date=<date>]
-        [--skip-pass-logs]
-        [--skip-logs]
-
-Options:
-    --config=<cfg-file>           Path to the configuration file.
-    --output-dir=<dir>            Path to the output directory.
-    --user=<user>                 Filter by user.
-    --branch=<branch>             Filter by branch.
-    --machine-type=<machine_type> Filter by machine_type.
-    --suite=<suite>               Filter by suite.
-    --status=<status>             Filter by status.
-    --date=<date>                 Filter by date (YYYY-MM-DD).
-    --skip-pass-logs              Skip logs for passed tests.
-    --skip-logs                   Skip job logs.
-"""
-
 import os
-from datetime import datetime
 
 import requests
-from docopt import docopt
 
 from .utils import get_config, write_data, write_json
 
@@ -85,24 +56,6 @@ def get_runs(base_url, segments):
     return get_data(url)
 
 
-def create_run_dirs(name, output_dir, skip_logs):
-    """Create directories for the run"""
-    # Create output directory with run name
-    run_dir = os.path.join(output_dir, name)
-    os.makedirs(run_dir, exist_ok=True)
-
-    # Create jobs and logs directories
-    jobs_dir = os.path.join(run_dir, "jobs")
-    os.makedirs(jobs_dir, exist_ok=True)
-
-    logs_dir = None
-    if not skip_logs:
-        logs_dir = os.path.join(run_dir, "logs")
-        os.makedirs(logs_dir, exist_ok=True)
-
-    return run_dir, jobs_dir, logs_dir
-
-
 def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
     """Fetch jobs for the given teuthology run"""
     hrefs, job_ids = run.get("href"), []
@@ -132,66 +85,3 @@ def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
 
     print(f"Warning: 'href' key missing or empty for run: {run.get('name')}")
     return []
-
-
-def main(base_url, segments, output_dir, skip_pass_logs, skip_logs):
-    # Fetch jobs for the given teuthology runs
-    for run in get_runs(base_url, segments):
-        print(f"Processing run: {run.get('name')}")
-
-        # Create output directory for the run
-        run_dir, jobs_dir, logs_dir = create_run_dirs(
-            run.get("name"), output_dir, skip_logs
-        )
-
-        # Get jobs for the run
-        run["job_ids"] = get_jobs(run, jobs_dir, logs_dir, skip_pass_logs)
-
-        # Write jobs to output directory
-        write_json(os.path.join(run_dir, "results.json"), run)
-
-
-if __name__ == "__main__":
-    print(
-        "\n===== Starting new paddle session - "
-        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ====="
-    )
-
-    # Parse command line arguments
-    args = docopt(__doc__)
-
-    # Get configuration file
-    config_file = args["--config"]
-
-    # Check for output dir
-    output_dir = args["--output-dir"]
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
-
-    # Build URL segments
-    segments = []
-    if args["--user"]:
-        segments += ["user", args["--user"]]
-    if args["--branch"]:
-        segments += ["branch", args["--branch"]]
-    if args["--machine-type"]:
-        segments += ["machine_type", args["--machine-type"]]
-    if args["--suite"]:
-        segments += ["suite", args["--suite"]]
-    if args["--date"]:
-        segments += ["date", args["--date"]]
-    if args["--status"]:
-        segments += ["status", args["--status"]]
-
-    # Get output directory
-    output_dir = args["--output-dir"]
-
-    # Get log flag
-    skip_logs = args["--skip-logs"]
-    skip_pass_logs = args["--skip-pass-logs"]
-
-    # Get paddle base URL
-    base_url = get_paddle_baseurl(config_file)
-
-    # Get data from Paddle
-    main(base_url, segments, output_dir, skip_pass_logs, skip_logs)

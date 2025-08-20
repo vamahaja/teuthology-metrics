@@ -1,35 +1,8 @@
-"""
-Update job details in OpenSearch.
-
-Usage:
-    api/opensearch.py --config=<cfg-file> --testruns-dir=<dir>
-                  [--skip-drain3-templates]
-                  [--skip-pass-logs]
-                  [--skip-logs]
-
-Options:
-    --config=<cfg-file>         Path to the configuration file.
-    --testruns-dir=<dir>        Path to the test runs directory.
-    --skip-drain3-templates     Skip processing Drain3 templates.
-    --skip-pass-logs            Skip logs for passed tests.
-    --skip-logs                 Skip job logs entirely.
-"""
-
-import os
-from datetime import datetime
-
-from docopt import docopt
 from drain3 import TemplateMiner
 from drain3.file_persistence import FilePersistence
-from opensearchpy import OpenSearch, helpers
+from opensearchpy import OpenSearch
 
-from .utils import (
-    batchify,
-    get_config,
-    get_miner_config,
-    get_snapshot_file,
-    read_json,
-)
+from .utils import get_config, get_miner_config, get_snapshot_file
 
 INDEX_CONFIG = {
     "runs": {
@@ -43,15 +16,6 @@ INDEX_CONFIG = {
     },
     "jobs": {
         "name": "teuthology-jobs",
-        "body": {
-            "settings": {
-                "index.mapping.total_fields.limit": 10000,
-                "index.mapping.ignore_malformed": True,
-            },
-        },
-    },
-    "logs": {
-        "name": "teuthology-logs",
         "body": {
             "settings": {
                 "index.mapping.total_fields.limit": 10000,
@@ -90,16 +54,17 @@ def get_configs(_config, server="opensearch"):
 def get_template_miner(config):
     """Get Drain3 template miner instance"""
     file_path = get_snapshot_file(config)
+    print(f"Reading drain3 snapshot file from {file_path}")
 
     # Create persistence handler
-    persistence_handler = None
-    if not os.path.exists(file_path):
-        persistence_handler = FilePersistence(file_path=file_path)
+    persistence_handler = FilePersistence(file_path=file_path)
 
     # Get template miner config
     template_miner = TemplateMiner(
         config=get_miner_config(), persistence_handler=persistence_handler
     )
+
+    print(f"Restored drain3 templates: {len(template_miner.drain.clusters)}")
 
     return template_miner
 
@@ -216,18 +181,6 @@ def insert_job(client, job_id, job_data):
         )
 
 
-def insert_log(client, job_id, log_file):
-    """Insert a teuthology job log in OpenSearch"""
-    _index = INDEX_CONFIG.get("logs").get("name")
-    try:
-        insert_logs(client, _index, job_id, log_file)
-    except Exception as e:
-        print(
-            f"Error: Failed to insert logs for job-id {job_id} "
-            f"with error\n{str(e)}"
-        )
-
-
 def insert_run(client, name, run_data):
     """Insert a teuthology run in OpenSearch"""
     # Insert runs to openserach
@@ -236,139 +189,3 @@ def insert_run(client, name, run_data):
         insert_record(client, _index, name, run_data)
     except Exception as e:
         print(f"Error: Failed to insert run for {name} with error\n{str(e)}")
-
-
-def insert_jobs(
-    client, runs, testrun_path, skip_logs, skip_pass_logs, template_miner
-):
-    """Insert teuthology jobs in OpenSearch"""
-    for job_id in runs.get("job_ids", []):
-        print(f"Processing job id: {job_id}")
-
-        # Get job data
-        job_data = read_json(
-            f"{os.path.join(testrun_path, 'jobs', job_id)}.json"
-        )
-
-        # Update template miner with failure_reason
-        if template_miner and job_data.get("failure_reason"):
-            print(
-                f"Adding failure reason for job-id {job_id} to template miner"
-            )
-            job_data["failure_template"] = insert_failure_template(
-                client, job_data.get("failure_reason"), template_miner
-            )
-
-        # Insert job in OpenSearch
-        insert_job(client, job_id, job_data)
-
-        if skip_logs or (skip_pass_logs and job_data.get("status") == "pass"):
-            continue
-
-        # Get log file path
-        log_file = f"{os.path.join(testrun_path, 'logs', job_id)}.log"
-
-        # Update job logs
-        insert_log(client, job_id, log_file)
-
-
-def insert_logs(client, index, id, log_file):
-    """Insert logs into OpenSearch"""
-    print(f"Indexing logs in OpenSearch: {index}/{id}")
-    batch_size, batch_index = 1000, 0
-
-    # Open log file and start update logs
-    with open(log_file, "r", encoding="utf-8") as f:
-        # Iterate over log file lines
-        lines = (line for line in f if line.strip())
-
-        for batch_lines in batchify(lines, batch_size):
-            print(f"Processing batch {batch_index + 1}")
-
-            # Set action for job-id
-            actions = [
-                {
-                    "_index": index,
-                    "_source": {"message": line.rstrip("\n"), "job-id": id},
-                }
-                for line in batch_lines
-            ]
-
-            # Update logs to index
-            try:
-                helpers.bulk(client, actions)
-            except Exception as e:
-                print(f"Error during ingestion: {e}")
-
-            batch_index += 1
-
-
-def insert_runs(
-    client, testruns_path, skip_logs, skip_pass_logs, template_miner
-):
-    """Insert teuthology runs in OpenSearch"""
-    # Get test runs from metadata
-    runs = read_json(os.path.join(testruns_path, "results.json"))
-
-    # Insert jobs to opensearch
-    insert_jobs(
-        client,
-        runs,
-        testruns_path,
-        skip_logs,
-        skip_pass_logs,
-        template_miner,
-    )
-
-    # Insert run to OpenSearch
-    insert_run(client, runs.get("name"), runs)
-
-
-def main(client, testruns_dir, skip_logs, skip_pass_logs, template_miner):
-    """Update teuthology runs in OpenSearch"""
-    for testruns in os.scandir(testruns_dir):
-        # Check for directory
-        if not testruns.is_dir():
-            continue
-
-        print(f"Processing testruns: {testruns.name}")
-
-        # Update test runs to OpenSearch
-        insert_runs(
-            client,
-            testruns.path,
-            skip_logs,
-            skip_pass_logs,
-            template_miner,
-        )
-
-
-if __name__ == "__main__":
-    print(
-        "\n======== "
-        "Starting new OpenSearch session - "
-        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        " ======== "
-    )
-
-    # Parse command line arguments
-    args = docopt(__doc__)
-
-    # Get configuration and data
-    config = args["--config"]
-    testruns_dir = args["--testruns-dir"]
-
-    # Get log flag
-    skip_logs = args["--skip-logs"]
-    skip_pass_logs = args["--skip-pass-logs"]
-
-    # Get Drain3 templates flag
-    template_miner = None
-    if not args["--skip-drain3-templates"]:
-        template_miner = get_template_miner(config)
-
-    # Setup OpenSearch
-    client = setup_opensearch(config)
-
-    # Update OpenSearch data
-    main(client, testruns_dir, skip_logs, skip_pass_logs, template_miner)
