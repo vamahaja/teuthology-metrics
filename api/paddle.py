@@ -2,7 +2,7 @@
 Fetch teuthology runs from paddles.
 
 Usage:
-    paddle.py --config=<cfg-file> --output-dir=<dir>
+    api/paddle.py --config=<cfg-file> --output-dir=<dir>
         [--user=<user>]
         [--branch=<branch>]
         [--machine-type=<machine_type>]
@@ -25,13 +25,13 @@ Options:
     --skip-logs                   Skip job logs.
 """
 
-import json
 import os
 from datetime import datetime
 
 import requests
 from docopt import docopt
-from utils import get_config
+
+from .utils import get_config, write_data, write_json
 
 
 def get_paddle_baseurl(_config, server="paddle"):
@@ -85,6 +85,24 @@ def get_runs(base_url, segments):
     return get_data(url)
 
 
+def create_run_dirs(name, output_dir, skip_logs):
+    """Create directories for the run"""
+    # Create output directory with run name
+    run_dir = os.path.join(output_dir, name)
+    os.makedirs(run_dir, exist_ok=True)
+
+    # Create jobs and logs directories
+    jobs_dir = os.path.join(run_dir, "jobs")
+    os.makedirs(jobs_dir, exist_ok=True)
+
+    logs_dir = None
+    if not skip_logs:
+        logs_dir = os.path.join(run_dir, "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+
+    return run_dir, jobs_dir, logs_dir
+
+
 def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
     """Fetch jobs for the given teuthology run"""
     hrefs, job_ids = run.get("href"), []
@@ -103,12 +121,12 @@ def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
 
             # Write job id metadata
             job_path = os.path.join(jobs_dir, f"{job_id}.json")
-            write_job_metadata(job_path, job)
+            write_json(job_path, job)
 
             if logs_dir and (skip_pass_logs and job.get("status") == "fail"):
                 # Write job id logs
                 log_path = os.path.join(logs_dir, f"{job_id}.log")
-                write_job_logs(log_path, get_data(log_href))
+                write_data(log_path, get_data(log_href))
 
         return job_ids
 
@@ -116,49 +134,21 @@ def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
     return []
 
 
-def main(config_file, segments, output_dir, skip_pass_logs, skip_logs):
-    # Get paddle base URL
-    base_url = get_paddle_baseurl(config_file)
-
+def main(base_url, segments, output_dir, skip_pass_logs, skip_logs):
     # Fetch jobs for the given teuthology runs
     for run in get_runs(base_url, segments):
         print(f"Processing run: {run.get('name')}")
 
-        # Create output directory with run name
-        run_dir = os.path.join(output_dir, run.get("name"))
-        os.makedirs(run_dir, exist_ok=True)
-
-        jobs_dir = os.path.join(run_dir, "jobs")
-        os.makedirs(jobs_dir, exist_ok=True)
-
-        logs_dir = None
-        if not skip_logs:
-            logs_dir = os.path.join(run_dir, "logs")
-            os.makedirs(logs_dir, exist_ok=True)
+        # Create output directory for the run
+        run_dir, jobs_dir, logs_dir = create_run_dirs(
+            run.get("name"), output_dir, skip_logs
+        )
 
         # Get jobs for the run
         run["job_ids"] = get_jobs(run, jobs_dir, logs_dir, skip_pass_logs)
 
         # Write jobs to output directory
-        write_job_metadata(os.path.join(run_dir, "results.json"), run)
-
-
-def write_job_metadata(_file, metadata):
-    """Write data to a JSON file"""
-    print(f"Writing data to {_file}")
-
-    # Open the file and write the metadata
-    with open(_file, "w") as _f:
-        json.dump(metadata, _f, indent=2)
-
-
-def write_job_logs(_file, logs):
-    """Write logs to a file"""
-    print(f"Writing logs to {_file}")
-
-    # Open the file and write logs
-    with open(_file, "w") as _f:
-        _f.write(logs)
+        write_json(os.path.join(run_dir, "results.json"), run)
 
 
 if __name__ == "__main__":
@@ -200,5 +190,8 @@ if __name__ == "__main__":
     skip_logs = args["--skip-logs"]
     skip_pass_logs = args["--skip-pass-logs"]
 
+    # Get paddle base URL
+    base_url = get_paddle_baseurl(config_file)
+
     # Get data from Paddle
-    main(config_file, segments, output_dir, skip_pass_logs, skip_logs)
+    main(base_url, segments, output_dir, skip_pass_logs, skip_logs)
