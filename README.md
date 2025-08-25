@@ -8,16 +8,21 @@ This document deploys opensearch for processing test run results data from paddl
 - [Podman](https://podman.io/getting-started/installation) installed
 - [Podman Compose](https://github.com/containers/podman-compose) installed
 - Clone this repository
-- Create directory `/data` on node
+- Create directory `/data/{opensearch,dashboards}` on node
 
 ## Deployment Steps
 
-1. **Start the services:**
+1. **Change in directory permissions**
+    ```sh
+    sudo chown -R 1000:1000 /data && sudo chcon -Rt container_file_t /data
+    ```
+
+2. **Start the services:**
     ```sh
     OPENSEARCH_INITIAL_ADMIN_PASSWORD='<passwd>' podman-compose up -d
     ```
 
-2. **Verify the deployment:**
+3. **Verify the deployment:**
     ```sh
     podman-compose ps
     ```
