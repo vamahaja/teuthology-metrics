@@ -36,6 +36,17 @@ services:
     networks:
       - opensearch-net
 
+  scheduler:
+    image: scheduler-app:latest
+    container_name: scheduler
+    volumes:
+      - scheduler-data:/usr/share/scheduler:Z
+    depends_on:
+      - opensearch
+      - dashboards
+    networks:
+      - opensearch-net
+
 volumes:
   opensearch-data:
     driver: local
@@ -49,6 +60,13 @@ volumes:
     driver_opts:
       type: none
       device: /data/dashboards
+      o: bind
+
+  scheduler-data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /data/scheduler
       o: bind
 
 networks:

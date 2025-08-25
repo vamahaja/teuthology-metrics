@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from run import main as run_main
 
 # Set scheduler configs
-CONFIG_FILE = "/data/scheduler/config.cfg"
+CONFIG_FILE = "/usr/share/scheduler/config.cfg"
 SKIP_DRAIN3_TEMPLATES = False
 USER = "teuthology"
 TIMEZONE = "UTC"
