@@ -45,24 +45,14 @@ podman-compose down
 - [Podman Compose Documentation](https://github.com/containers/podman-compose)
 - [Project Wiki](../docs/)
 
-## Getting data from Paddle
+## Update OpenSearch with test runs
 
 - Update `config.cfg` with paddle server `host` and `port`
-- To get test results for `main` branch & `smoke` suite for date `July 31st, 2025` and executed by user `teuthology`
+- To update test results for `main` branch & `smoke` suite for date `July 31st, 2025` and executed by user `teuthology` to OpenSearch -
   ```sh 
-  python api/paddle.py \
+  python run.py \
     --config=.config.cfg \
     --user=teuthology \
     --suite=smoke \
-    --date=2025-07-31 \
-    --output-dir=./testruns
-  ```
-
-## Updating test runs to opensearch
-- Update `config.cfg` with opensearch server `host` and `port`
-- To update opensearch with generated teuthology runs
-  ```sh
-  python api/opensearch.py \
-    --config=./config.cfg \
-    --testruns-dir=./testruns
+    --date=2025-07-31
   ```
