@@ -8,16 +8,21 @@ This document deploys opensearch for processing test run results data from paddl
 - [Podman](https://podman.io/getting-started/installation) installed
 - [Podman Compose](https://github.com/containers/podman-compose) installed
 - Clone this repository
-- Create directory `/data` on node
+- Create directory `/data/{opensearch,dashboads,scheduler}` on node
 
 ## Deployment Steps
 
-1. **Start the services:**
+1. **Create scheduler podman image**
+    ```sh
+    podman build -t scheduler-app:latest .
+    ```
+
+2. **Start the services**
     ```sh
     OPENSEARCH_INITIAL_ADMIN_PASSWORD='<passwd>' podman-compose up -d
     ```
 
-2. **Verify the deployment:**
+3. **Verify the deployment**
     ```sh
     podman-compose ps
     ```
@@ -48,21 +53,12 @@ podman-compose down
 ## Getting data from Paddle
 
 - Update `config.cfg` with paddle server `host` and `port`
-- To get test results for `main` branch & `smoke` suite for date `July 31st, 2025` and executed by user `teuthology`
+- To update test results for `main` branch & `smoke` suite for date `July 31st, 2025` and executed by user `teuthology`
   ```sh 
-  python api/paddle.py \
+  python run.py \
     --config=.config.cfg \
     --user=teuthology \
     --suite=smoke \
     --date=2025-07-31 \
     --output-dir=./testruns
-  ```
-
-## Updating test runs to opensearch
-- Update `config.cfg` with opensearch server `host` and `port`
-- To update opensearch with generated teuthology runs
-  ```sh
-  python api/opensearch.py \
-    --config=./config.cfg \
-    --testruns-dir=./testruns
   ```

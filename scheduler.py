@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from run import main as run_main
 
 # Set scheduler configs
-CONFIG_FILE = "/data/scheduler/config.cfg"
+CONFIG_FILE = "/usr/share/scheduler-configs/configs/config.cfg"
 SKIP_DRAIN3_TEMPLATES = False
 USER = "teuthology"
 TIMEZONE = "UTC"
@@ -76,7 +76,7 @@ def main():
     scheduler = BackgroundScheduler(timezone=tz)
 
     # Trigger
-    trigger = CronTrigger(minute=0, hour="*/4")
+    trigger = CronTrigger(minute="*", hour="*")
 
     # Add job for suites
     scheduler.add_job(
