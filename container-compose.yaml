@@ -15,7 +15,7 @@ services:
         soft: -1
         hard: -1
     volumes:
-      - opensearch-data:/usr/share/opensearch/data
+      - opensearch-data:/usr/share/opensearch/data:Z
     ports:
       - "9200:9200"
     networks:
@@ -28,7 +28,7 @@ services:
       - OPENSEARCH_HOSTS=http://opensearch:9200
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
     volumes:
-      - dashboards-data:/usr/share/opensearch-dashboards/data
+      - dashboards-data:/usr/share/opensearch-dashboards/data:Z
     ports:
       - "5601:5601"
     depends_on:
@@ -53,4 +53,4 @@ volumes:
 
 networks:
   opensearch-net:
-    external: true
+    external: false
