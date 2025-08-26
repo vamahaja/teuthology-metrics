@@ -1,11 +1,6 @@
-flake8
-tox
-isort
-black
-yamllint
-opensearch-py
-docopt
-requests
-drain3
 apscheduler
+docopt
+drain3
+opensearch-py
 pytz
+requests
