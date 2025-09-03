@@ -1,8 +1,11 @@
+import logging
 import os
 
 import requests
 
 from .utils import get_config, write_data, write_json
+
+LOG = logging.getLogger("teuthology-metrics")
 
 
 def get_paddle_baseurl(_config, server="paddle"):
@@ -13,7 +16,7 @@ def get_paddle_baseurl(_config, server="paddle"):
     if _config["port"]:
         base_url += f":{_config['port']}"
 
-    print(f"Paddle server URL: {base_url}")
+    LOG.info(f"Paddle server URL: {base_url}")
 
     return base_url
 
@@ -35,7 +38,7 @@ def get_data(url):
         else:
             raise ValueError(f"Unexpected Content-Type : {ctype}")
 
-    print(
+    LOG.error(
         "Failed to fetch data from url. "
         f"Status code: {response.status_code} & Text:\n{response.text}"
     )
@@ -44,7 +47,7 @@ def get_data(url):
 
 def get_runs(base_url, segments):
     """Fetch teuthology runs from Paddle."""
-    print(f"Requesting test runs: {segments}")
+    LOG.debug(f"Requesting test runs: {segments}")
 
     # Construct the URL for fetching runs
     endpoint = "/".join(segments) if segments else ""
@@ -62,12 +65,12 @@ def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
 
     # Check if hrefs is a list and has elements
     if hrefs and isinstance(hrefs, list) and len(hrefs) > 0:
-        print(f"Fetching jobs for run: {run.get('name')}")
+        LOG.debug(f"Fetching jobs for run: {run.get('name')}")
         for job in get_data(hrefs[0]).get("jobs", []):
             # Get log reference and job id
             log_href, job_id = job.get("log_href"), job.get("job_id")
 
-            print(f"Processing job: {job.get('job_id')}")
+            LOG.debug(f"Processing job: {job.get('job_id')}")
 
             # Update job id list
             job_ids.append(job_id)
@@ -83,5 +86,7 @@ def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
 
         return job_ids
 
-    print(f"Warning: 'href' key missing or empty for run: {run.get('name')}")
+    LOG.debug(
+        f"Warning: 'href' key missing or empty for run: {run.get('name')}"
+    )
     return []

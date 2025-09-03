@@ -10,6 +10,8 @@ Usage:
         [--status=<status>]
         [--date=<date>]
         [--skip-drain3-templates]
+        [--log-level <LOG>]
+        [--log-path <LOG_PATH>]
 
 Options:
     --config=<cfg-file>           Path to the configuration file.
@@ -20,9 +22,11 @@ Options:
     --status=<status>             Filter by status.
     --date=<date>                 Filter by date (YYYY-MM-DD).
     --skip-drain3-templates       Skip processing Drain3 templates.
+    --log-level <LOG>             Log level for log utility
+    --log-path <LOG_PATH>         Log file path for log utility
 """
 
-from datetime import datetime
+import logging
 
 from docopt import docopt
 
@@ -35,15 +39,19 @@ from api.opensearch import (
 )
 from api.paddle import get_data, get_paddle_baseurl, get_runs
 
+LOG = logging.getLogger("teuthology-metrics")
+
 
 def process_job(client, job, template_miner):
     # Get log reference and job id
     job_id, failure_reason = job.get("job_id"), job.get("failure_reason")
-    print(f"Processing job: {job_id}")
+    LOG.debug(f"Processing job: {job_id}")
 
     # Update template miner with failure_reason
     if template_miner and failure_reason:
-        print(f"Adding failure reason for job-id {job_id} to template miner")
+        LOG.debug(
+            f"Adding failure reason for job-id {job_id} to template miner"
+        )
         job["failure_template"] = insert_failure_template(
             client, failure_reason, template_miner
         )
@@ -60,7 +68,7 @@ def process_runs(client, run, template_miner):
 
     # Check if hrefs is a list and has elements
     if hrefs and isinstance(hrefs, list) and len(hrefs) > 0:
-        print(f"Fetching jobs for run: {name}")
+        LOG.debug(f"Fetching jobs for run: {name}")
         for job in get_data(hrefs[0]).get("jobs", []):
             # Update job with run metadata
             job_id = process_job(client, job, template_miner)
@@ -86,19 +94,13 @@ def main(config_file, skip_drain3_templates, segments):
 
     # Fetch jobs for the given teuthology runs
     for run in get_runs(base_url, segments):
-        print(f"Processing run: {run.get('name')}")
+        LOG.debug(f"Processing run: {run.get('name')}")
 
         # Update run metadata
         process_runs(client, run, template_miner)
 
 
 if __name__ == "__main__":
-    print(
-        "\n======== "
-        "Starting new OpenSearch session - "
-        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        " ======== "
-    )
 
     # Parse command line arguments
     args = docopt(__doc__)

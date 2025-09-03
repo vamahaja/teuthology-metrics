@@ -1,9 +1,16 @@
 import configparser
+import datetime
 import json
+import logging
 import os
+import tempfile
 
 from drain3.masking import MaskingInstruction
 from drain3.template_miner_config import TemplateMinerConfig
+
+from .log import LOG_FORMAT, Log
+
+LOG = logging.getLogger("teuthology-metrics")
 
 
 def read_config(_file):
@@ -11,7 +18,7 @@ def read_config(_file):
     if not os.path.exists(_file):
         raise FileNotFoundError(f"Config file '{_file}' not found.")
 
-    print(f"Reading config file: {_file}")
+    LOG.info(f"Reading config file: {_file}")
 
     # Read the config file
     config = configparser.ConfigParser()
@@ -25,7 +32,7 @@ def read_config(_file):
 
 def write_json(_file, _json):
     """Write data to a JSON file"""
-    print(f"Writing data to {_file}")
+    LOG.info(f"Writing data to {_file}")
 
     # Open the file and write the json
     with open(_file, "w") as _f:
@@ -38,7 +45,7 @@ def read_json(_file):
     if not os.path.exists(_file):
         raise FileNotFoundError(f"Json file '{_file}' not found.")
 
-    print(f"Reading json from {_file}")
+    LOG.info(f"Reading json from {_file}")
 
     # Open the file and read the json
     with open(_file, "r") as _f:
@@ -47,7 +54,7 @@ def read_json(_file):
 
 def write_data(_file, _data):
     """Write data to a file"""
-    print(f"Writing data to {_file}")
+    LOG.info(f"Writing data to {_file}")
 
     # Open the file and write data
     with open(_file, "w") as _f:
@@ -191,3 +198,45 @@ def get_miner_config():
     ]
 
     return config
+
+
+def set_logging_env(level=None, path=None):
+    """
+    Set up logging environment.
+
+    Parameters:
+    level (str): Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+                    Default is DEBUG.
+    path (str): Log directory path. Default is a temporary directory.
+
+    Returns:
+    Log: Log object.
+    """
+
+    log = Log()
+
+    for handler in log.logger.handlers[:]:
+        handler.close()
+        log.logger.removeHandler(handler)
+    LOG.info("Setting up logging environment")
+    level = level.upper() if level else "DEBUG"
+    log.logger.setLevel(level)
+    LOG.info(f"Log level set to: {level}")
+    if not path:
+        path = os.path.join(tempfile.gettempdir(), "teuthology-metrics-logs")
+        LOG.info(f"Generating log directory: {path}")
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+    name = "teuthology-metrics"
+    path = os.path.join(
+        path, f"{name}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+    )
+    LOG.info(f"Log path: {path}")
+
+    formatter = logging.Formatter(LOG_FORMAT)
+    file_handler = logging.FileHandler(path)
+    file_handler.setFormatter(formatter)
+    log.logger.addHandler(file_handler)
+
+    return log
