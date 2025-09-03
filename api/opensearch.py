@@ -1,9 +1,12 @@
+import logging
+
 from drain3 import TemplateMiner
 from drain3.file_persistence import FilePersistence
 from opensearchpy import OpenSearch
 
 from .utils import get_config, get_miner_config, get_snapshot_file
 
+LOG = logging.getLogger("teuthology-metrics")
 INDEX_CONFIG = {
     "runs": {
         "name": "teuthology-runs",
@@ -54,7 +57,7 @@ def get_configs(_config, server="opensearch"):
 def get_template_miner(config):
     """Get Drain3 template miner instance"""
     file_path = get_snapshot_file(config)
-    print(f"Reading drain3 snapshot file from {file_path}")
+    LOG.debug(f"Reading drain3 snapshot file from {file_path}")
 
     # Create persistence handler
     persistence_handler = FilePersistence(file_path=file_path)
@@ -64,7 +67,9 @@ def get_template_miner(config):
         config=get_miner_config(), persistence_handler=persistence_handler
     )
 
-    print(f"Restored drain3 templates: {len(template_miner.drain.clusters)}")
+    LOG.debug(
+        f"Restored drain3 templates: {len(template_miner.drain.clusters)}"
+    )
 
     return template_miner
 
@@ -75,7 +80,7 @@ def connect(config):
     base_url, username, password = get_configs(config, "opensearch")
 
     # Connect to OpenSearch
-    print(f"Connecting to OpenSearch at {base_url} with user {username}")
+    LOG.info(f"Connecting to OpenSearch at {base_url} with user {username}")
     try:
         client = OpenSearch(
             base_url,
@@ -89,7 +94,7 @@ def connect(config):
             timeout=180,
         )
     except Exception as e:
-        print(f"Failed to connect to OpenSearch: {e}")
+        LOG.error(f"Failed to connect to OpenSearch: {e}")
         raise e
 
     return client
@@ -97,18 +102,18 @@ def connect(config):
 
 def create_index(client, index_name, body):
     """Create OpenSearch index"""
-    print(f"Creating new index: {index_name}")
+    LOG.debug(f"Creating new index: {index_name}")
     if not client.indices.exists(index=index_name):
         try:
             client.indices.create(index=index_name, body=body)
         except Exception as e:
-            print(f"Error creating index in OpenSearch: {e}")
+            LOG.error(f"Error creating index in OpenSearch: {e}")
             raise e
 
-        print(f"Created index: {index_name}")
+        LOG.debug(f"Created index: {index_name}")
         return
 
-    print(f"Index already present: {index_name}")
+    LOG.debug(f"Index already present: {index_name}")
 
 
 def setup_opensearch(config):
@@ -128,14 +133,14 @@ def setup_opensearch(config):
 
 def insert_record(client, index, id, body):
     """Insert a document into OpenSearch"""
-    print(f"Indexing document in OpenSearch: {index}/{id}")
+    LOG.debug(f"Indexing document in OpenSearch: {index}/{id}")
 
     # Insert the document in OpenSearch
     response = None
     try:
         response = client.index(index=index, id=id, body=body, refresh=True)
     except Exception as e:
-        print(f"Error indexing document in OpenSearch: {e}")
+        LOG.error(f"Error indexing document in OpenSearch: {e}")
         raise e
 
     # Check if the response is successful
@@ -148,7 +153,7 @@ def insert_failure_template(client, message, template_miner):
     failure_template = template_miner.add_log_message(message)
 
     # Insert failure template in patterns index
-    print(
+    LOG.debug(
         "Inserting failure template for cluster id "
         f"{failure_template.get('cluster_id')} in OpenSearch"
     )
@@ -160,7 +165,7 @@ def insert_failure_template(client, message, template_miner):
             {"failure_template": failure_template},
         )
     except Exception as e:
-        print(
+        LOG.error(
             f"Error: Failed to insert failure template for cluster id "
             f"{failure_template.get('cluster_id')} with error\n{str(e)}"
         )
@@ -175,7 +180,7 @@ def insert_job(client, job_id, job_data):
     try:
         insert_record(client, _index, job_id, job_data)
     except Exception as e:
-        print(
+        LOG.error(
             f"Error: Failed to insert job job-id {job_id} "
             f"with error\n{str(e)}"
         )
@@ -188,4 +193,6 @@ def insert_run(client, name, run_data):
     try:
         insert_record(client, _index, name, run_data)
     except Exception as e:
-        print(f"Error: Failed to insert run for {name} with error\n{str(e)}")
+        LOG.error(
+            f"Error: Failed to insert run for {name} with error\n{str(e)}"
+        )
