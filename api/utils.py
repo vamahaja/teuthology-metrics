@@ -185,6 +185,50 @@ def get_miner_config():
         MaskingInstruction(pattern=r"\d{1,} OSD\(s\)", mask_with="OSD_COUNT"),
         # Mask PG service count
         MaskingInstruction(pattern=r"\d{1,} (pg|PG)", mask_with="PG_COUNT"),
+        # Mask mon service count
+        MaskingInstruction(pattern=r"\d+\/\d+ mon", mask_with="MON_COUNT"),
+        # Mask Pid number
+        MaskingInstruction(pattern=r"pid=(\d+)", mask_with="PID_NUMBER"),
+        # Mask retry count
+        MaskingInstruction(pattern=r"tries \(\d+\)", mask_with="RETRY_COUNT"),
+        # Mask ceph image references
+        MaskingInstruction(pattern=r"--fsid \S+", mask_with="CLUSTER_FSID"),
+        # Mask seconds count
+        MaskingInstruction(
+            pattern=r"\d+ sec*|\d+s", mask_with="SECONDS_COUNT"
+        ),
+        # Mask process count
+        MaskingInstruction(
+            pattern=r"process (\d+)", mask_with="PROCESS_COUNT"
+        ),
+        # Mask file system count
+        MaskingInstruction(
+            pattern=r"\d+.*filesystem", mask_with="FILESYSTEM_COUNT"
+        ),
+        # Mask ceph image references
+        MaskingInstruction(
+            pattern=r"ceph:\w+", mask_with="CEPH_IMAGE_REFERENCE"
+        ),
+        # Mask commit references
+        MaskingInstruction(
+            pattern=r"CEPH_REF=\w+", mask_with="CEPH_REFERENCE"
+        ),
+        # Mask audit references
+        MaskingInstruction(
+            pattern=r"audit\(\S+\)", mask_with="AUDIT_REFERENCE"
+        ),
+        # Mask centos stream references
+        MaskingInstruction(
+            pattern=r"centos.*(\d).*stream", mask_with="CENTOS_STREAM_VERSION"
+        ),
+        # Mask ubuntu references
+        MaskingInstruction(
+            pattern=r"ubuntu.(\d+).(\d+)", mask_with="UBUNTU_VERSION"
+        ),
+        # Mask ceph version
+        MaskingInstruction(
+            pattern=r"(\d+).(\d+).(\d+)-(\d+).(\S+)", mask_with="CEPH_VERSION"
+        ),
         # Mask osd & host down counts
         MaskingInstruction(
             pattern=r"\d{1,} host \(\d{1,} osds\)",
