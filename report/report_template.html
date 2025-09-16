@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Teuthology Report</title>
+    <style>
+        body, table, th, td, caption {
+            font-family: arial, sans-serif;
+            color: #000; 
+        }
+        a {
+            color: #000; 
+            text-decoration: none; 
+        }
+        table {
+            border-collapse: collapse;
+            width: 1000px;
+            margin: auto;
+        }
+        td, th {
+            border: 1px solid #050505;
+            text-align: center;
+            padding: 8px;
+        }
+        caption {
+            font-size: 150%;
+            font-weight: bold;
+        }
+        .header-cell {
+            background-color: #D4D7D4;
+            font-weight: bold;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <br>
+    <table>
+        <caption style="background-color: #A5A5A5; border: 1px solid black; height: 40px;">
+            TEST DETAILS
+        </caption>
+        <tr>
+            <td class="header-cell">Branch</td>
+            <td>{{ branch }}</td>
+        </tr>
+        <tr>
+            <td class="header-cell">Cloud Platform</td>
+            <td>{{ cloud_platform }}</td>
+        </tr>
+    </table>
+
+    <br>
+
+    <table>
+        <caption style="background-color: #A5A5A5; border: 1px solid black; height: 40px;">
+            TEST SUMMARY
+        </caption>
+        <tr>
+            <th style="background-color: #D4D7D4;">Test Suite</th>
+            <th style="background-color: #D4D7D4;">Total</th>
+            <th style="background-color: #D4D7D4;">Passed</th>
+            <th style="background-color: #D4D7D4;">Failed</th>
+        </tr>
+        {% for entry in data %}
+        {% set total_failed = entry.failed + entry.dead + entry.waiting + entry.queued %}
+        <tr style="background-color: {% if entry.total == 0 %}#ECECC3{% elif total_failed > 0 %}#FCD0D0{% else %}#DDFFDD{% endif %};">
+            <td><b><a href="{{ entry.href }}" style="color: #0645AD;">{{ entry.suite }}</a></b></td>
+            <td>{{ entry.total }}</td>
+            <td>{{ entry.passed }}</td>
+            <td>{{ total_failed }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
