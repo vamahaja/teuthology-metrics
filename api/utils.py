@@ -127,6 +127,29 @@ def get_config(_file, server):
     return _config
 
 
+def get_email_config(_file, server="email"):
+    """Get configuration details"""
+    # Read the config file
+    _config, config = {}, read_config(_file)
+
+    _config["email_from"] = config[server].get("FROM")
+    _config["email_to"] = config[server].get("TO")
+    if not _config["email_from"] or not _config["email_to"]:
+        raise ValueError(
+            "Email configuration details not found in configuration file."
+        )
+    _config["host"] = config[server].get("HOST")
+    _config["port"] = config[server].get("PORT")
+    if not _config["host"] or not _config["port"]:
+        raise ValueError(
+            "Email host and port not found in configuration file."
+        )
+    _config["index"] = config[server].get("REPORT_INDEX")
+    if not _config["index"]:
+        raise ValueError("Index not found in configuration file.")
+    return _config
+
+
 def get_snapshot_file(_file):
     """Get snapshot file from the config file."""
     # Read the config file
