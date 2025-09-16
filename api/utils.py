@@ -127,6 +127,30 @@ def get_config(_file, server):
     return _config
 
 
+def get_email_config(_file):
+    """Get configuration details"""
+    # Read the config file
+    config = read_config(_file)
+    if "email" not in config:
+        raise ValueError("Section 'email' not found in configuration file.")
+
+    # Convert the section to a dict
+    email_section = dict(config["email"])
+
+    required_keys = [
+        "email_from",
+        "host",
+        "port",
+        "opensearch_index",
+        "results_server",
+    ]
+    for key in required_keys:
+        if not email_section.get(key):
+            raise ValueError(f"Email config missing required key: {key}")
+
+    return email_section
+
+
 def get_snapshot_file(_file):
     """Get snapshot file from the config file."""
     # Read the config file
