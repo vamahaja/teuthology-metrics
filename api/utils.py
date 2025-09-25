@@ -123,7 +123,17 @@ def get_config(_file, server):
             raise ValueError(
                 "Username and password not found in configuration file."
             )
+        _config["index"] = config[server].get("INDEX")
+        if not _config["index"]:
+            raise ValueError("Index not found in configuration file.")
 
+    if server == "email":
+        _config["email_from"] = config[server].get("EMAIL_FROM")
+        _config["email_to"] = config[server].get("EMAIL_TO")
+        if not _config["email_from"] or not _config["email_to"]:
+            raise ValueError(
+                "Email from and to addresses not found in configuration file."
+            )
     return _config
 
 
