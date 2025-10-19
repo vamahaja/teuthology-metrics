@@ -4,3 +4,4 @@ drain3==0.9.11
 opensearch-py
 pytz
 requests
+jinja2
