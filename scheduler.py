@@ -8,6 +8,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from api.utils import set_logging_env
+from report import main as report_main
 from run import main as run_main
 
 # Set scheduler configs
@@ -36,11 +37,11 @@ LOG = logging.getLogger("teuthology-metrics")
 
 def run_task():
     """Run teuthology testrun process"""
+    # Set up logging environment for this run
+    set_logging_env(level=log_level, path=log_path)
+
     # Get current date
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    # Set up logging environment
-    LOG = set_logging_env(level=log_level, path=log_path)
 
     # Execute run method
     try:
@@ -62,29 +63,37 @@ def run_task():
         LOG.debug("[JOB END]")
 
 
-def create_shutdown_handler(scheduler):
-    """Create shutdown handler"""
+def run_report():
+    """Run teuthology report process"""
+    # Set up logging environment for this run
+    set_logging_env(level=log_level, path=log_path)
 
-    def shutdown(signum, frame):
-        LOG.debug(f"Received signal {signum}. Shutting down scheduler...")
-        try:
-            scheduler.shutdown(wait=True)
-        except Exception:
-            LOG.error("Error during scheduler shutdown")
-        finally:
-            sys.exit(0)
+    # Get current date
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    return shutdown
+    # Execute report method
+    try:
+        for branch in ["master", "squid", "tentacle"]:
+            LOG.debug(f"[REPORT JOB START] branch={branch} | date={now}")
+
+            # Run teuthology report process
+            report_main(
+                config_file=CONFIG_FILE,
+                report_date=now,
+                branch=branch,
+            )
+    except Exception as exc:
+        LOG.error(f"[REPORT JOB ERROR] {exc}")
+    finally:
+        LOG.debug("[REPORT JOB END]")
 
 
-def main():
-    # Time zone
-    tz = pytz.timezone(TIMEZONE)
-
+def start_task_scheduler(tz):
+    """Start task scheduler"""
     # Scheduler
     scheduler = BackgroundScheduler(timezone=tz)
 
-    # Trigger
+    # Trigger : Every 4 hours
     trigger = CronTrigger(minute=0, hour="*/4")
 
     # Add job for suites
@@ -99,10 +108,70 @@ def main():
 
     # Start scheduler
     scheduler.start()
-    LOG.debug(f"Scheduler started for TZ={TIMEZONE}")
+    LOG.debug(f"Task Scheduler started for TZ={TIMEZONE}")
 
-    # Exit code
-    shutdown_handler = create_shutdown_handler(scheduler)
+    return scheduler
+
+
+def start_report_scheduler(tz):
+    """Start report scheduler"""
+    # Scheduler
+    scheduler = BackgroundScheduler(timezone=tz)
+
+    # Trigger: Every Monday at 5 PM IST (11:30 UTC)
+    trigger = CronTrigger(day_of_week="mon", hour=11, minute=30)
+
+    # Add job for report
+    scheduler.add_job(
+        run_report,
+        trigger=trigger,
+        replace_existing=True,
+        coalesce=True,
+        max_instances=MAX_INSTANCES,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+    )
+
+    # Start scheduler
+    scheduler.start()
+    LOG.debug(f"Report Scheduler started for TZ={TIMEZONE}")
+
+    return scheduler
+
+
+def create_shutdown_handler(task_scheduler, report_scheduler):
+    """Create shutdown handler"""
+
+    def shutdown(signum, frame):
+        LOG.debug(f"Received signal {signum}. Shutting down schedulers...")
+        try:
+            task_scheduler.shutdown(wait=True)
+            report_scheduler.shutdown(wait=True)
+        except Exception as exc:
+            LOG.error(f"Error during scheduler shutdown: {exc}")
+        finally:
+            sys.exit(0)
+
+    return shutdown
+
+
+def main():
+    # Set up logging environment
+    set_logging_env(level=log_level, path=log_path)
+
+    # Time zone
+    tz = pytz.timezone(TIMEZONE)
+
+    # Start both schedulers
+    task_scheduler = start_task_scheduler(tz)
+    report_scheduler = start_report_scheduler(tz)
+
+    # Log the scheduler start
+    LOG.debug(f"Schedulers started for TZ={TIMEZONE}")
+
+    # Create shutdown handler for graceful termination
+    shutdown_handler = create_shutdown_handler(
+        task_scheduler, report_scheduler
+    )
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
 

@@ -110,7 +110,8 @@ def send_email(config, subject, html_body, email_address):
 
     with smtplib.SMTP(config["host"], config["port"]) as server:
         server.starttls()
-        server.login(config["username"], config["password"])
+        if config.get("username") and config.get("password"):
+            server.login(config["username"], config["password"])
         server.sendmail(config["email_from"], email_address, msg.as_string())
         LOG.debug("Report sent sucessfully")
 
