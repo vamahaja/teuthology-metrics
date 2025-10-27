@@ -11,7 +11,7 @@ LOG = logging.getLogger("teuthology-metrics")
 def get_paddle_baseurl(_config, server="paddle"):
     """Get the base URL for the Paddle server"""
     _config = get_config(_config, server)
-    base_url = f"https://{_config['host']}"
+    base_url = f"http://{_config['host']}"
 
     if _config["port"]:
         base_url += f":{_config['port']}"
