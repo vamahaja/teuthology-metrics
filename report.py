@@ -69,6 +69,9 @@ def render_teuthology_report(hits, branch, results_server):
 
     cloud_platform = "OpenStack"
 
+    # Extract SHA ID from the results
+    sha_id = hits[0]["_source"].get("sha1", "N/A") if hits else "N/A"
+
     # Prepare the data
     data = [
         {
@@ -89,7 +92,10 @@ def render_teuthology_report(hits, branch, results_server):
         html_template = Template(f.read())
 
     return html_template.render(
-        branch=branch.capitalize(), cloud_platform=cloud_platform, data=data
+        branch=branch.capitalize(),
+        cloud_platform=cloud_platform,
+        sha_id=sha_id,
+        data=data,
     )
 
 
