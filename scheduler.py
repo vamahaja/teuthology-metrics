@@ -1,7 +1,7 @@
 import logging
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -13,6 +13,7 @@ from run import main as run_main
 
 # Set scheduler configs
 CONFIG_FILE = "/usr/share/scheduler/config.cfg"
+CRON_PATH = "/usr/share/scheduler/cron"
 SKIP_DRAIN3_TEMPLATES = False
 USER = "teuthology"
 TIMEZONE = "UTC"
@@ -68,19 +69,30 @@ def run_report():
     # Set up logging environment for this run
     set_logging_env(level=log_level, path=log_path)
 
-    # Get current date
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Get current date (Monday)
+    now = datetime.now(timezone.utc)
+    end_date = now.strftime("%Y-%m-%d")
 
+    # Calculate date ranage
+    schedule_date = now - timedelta(days=3)
+    start_date = schedule_date.strftime("%Y-%m-%d")
+    sha_id = open(f"{CRON_PATH}/{start_date}").read().strip()
     # Execute report method
     try:
         for branch in ["master", "squid", "tentacle"]:
-            LOG.debug(f"[REPORT JOB START] branch={branch} | date={now}")
+            LOG.debug(
+                f"[REPORT JOB START] branch={branch} | "
+                f"start_date={start_date} | end_date={end_date}"
+            )
 
-            # Run teuthology report process
+            # Run teuthology report process with date range
             report_main(
                 config_file=CONFIG_FILE,
-                report_date=now,
+                start_date=start_date,
+                end_date=end_date,
                 branch=branch,
+                sha_id=sha_id,
+                email_address=None,
             )
     except Exception as exc:
         LOG.error(f"[REPORT JOB ERROR] {exc}")
@@ -118,8 +130,8 @@ def start_report_scheduler(tz):
     # Scheduler
     scheduler = BackgroundScheduler(timezone=tz)
 
-    # Trigger: Every Monday at 5 PM IST (11:30 UTC)
-    trigger = CronTrigger(day_of_week="mon", hour=11, minute=30)
+    # Trigger: Every Monday at 6 PM IST (12:30 UTC)
+    trigger = CronTrigger(day_of_week="mon", hour=12, minute=30)
 
     # Add job for report
     scheduler.add_job(
