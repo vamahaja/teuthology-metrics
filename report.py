@@ -169,6 +169,11 @@ def main(config_file, start_date, end_date, branch, email_address, sha_id):
         sha_id,
     )
 
+    # Check if data is available
+    if not hits:
+        LOG.warning(f"No data found for branch: {branch}, skipping email")
+        return
+
     # Render the HTML report
     html_content = render_teuthology_report(
         hits, branch, email_config["results_server"], sha_id
@@ -178,6 +183,7 @@ def main(config_file, start_date, end_date, branch, email_address, sha_id):
 
     # Send the email with the report
     send_email(email_config, subject, html_content, email_address)
+    LOG.info(f"Report sent for branch: {branch} to {email_address}")
 
 
 if __name__ == "__main__":
