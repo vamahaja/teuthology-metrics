@@ -78,8 +78,8 @@ def run_report():
     start_date = schedule_date.strftime("%Y-%m-%d")
     sha_id = open(f"{CRON_PATH}/{start_date}").read().strip()
     # Execute report method
-    try:
-        for branch in ["master", "squid", "tentacle"]:
+    for branch in ["master", "squid", "tentacle"]:
+        try:
             LOG.debug(
                 f"[REPORT JOB START] branch={branch} | "
                 f"start_date={start_date} | end_date={end_date}"
@@ -94,10 +94,12 @@ def run_report():
                 sha_id=sha_id,
                 email_address=None,
             )
-    except Exception as exc:
-        LOG.error(f"[REPORT JOB ERROR] {exc}")
-    finally:
-        LOG.debug("[REPORT JOB END]")
+        except Exception as exc:
+            LOG.error(f"[REPORT JOB ERROR] branch={branch} | error={exc}")
+            # Continue with the next branch
+            continue
+
+    LOG.debug("[REPORT JOB END]")
 
 
 def start_task_scheduler(tz):
