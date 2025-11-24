@@ -6,7 +6,8 @@ services:
     container_name: opensearch
     environment:
       - discovery.type=single-node
-      - plugins.security.disabled=true
+      - plugins.security.disabled=false
+      - plugins.security.ssl.http.enabled=false
       - bootstrap.memory_lock=true
       - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
@@ -26,7 +27,9 @@ services:
     container_name: dashboards
     environment:
       - OPENSEARCH_HOSTS=http://opensearch:9200
-      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=false
+      - OPENSEARCH_USERNAME=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
     volumes:
       - dashboards-data:/usr/share/opensearch-dashboards/data:Z
     ports:
