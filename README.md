@@ -37,6 +37,13 @@ This document deploys opensearch for processing test run results data from paddl
     ```sh
     podman-compose ps
     ```
+    
+    All three containers should show "Up" status.
+
+7. **Access OpenSearch Dashboards**
+    - Open browser: `http://localhost:5601`
+    - Username: `admin`
+    - Password: The password you set in step 5
 
 ## Configuration
 
