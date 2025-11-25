@@ -181,8 +181,7 @@ def insert_job(client, job_id, job_data):
         insert_record(client, _index, job_id, job_data)
     except Exception as e:
         LOG.error(
-            f"Error: Failed to insert job job-id {job_id} "
-            f"with error\n{str(e)}"
+            f"Error: Failed to insert job job-id {job_id} with error\n{str(e)}"
         )
 
 
