@@ -7,9 +7,8 @@ import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from api.utils import set_logging_env
-from report import main as report_main
-from run import main as run_main
+from src.utils import set_logging_env
+from src.processer import process, publish_report
 
 # Set scheduler configs
 CONFIG_FILE = "/usr/share/scheduler/config.cfg"
@@ -33,7 +32,7 @@ SUITES = [
 log_level = "DEBUG"
 log_path = "/var/log/"
 
-LOG = logging.getLogger("teuthology-metrics")
+log = logging.getLogger("teuthology-metrics")
 
 
 def run_task():
@@ -47,21 +46,21 @@ def run_task():
     # Execute run method
     try:
         for suite in SUITES:
-            LOG.debug(f"[JOB START] suite={suite} | date={now}")
+            log.debug(f"[TASK JOB START] suite={suite} | date={now}")
 
             # Set paddle variables
             segments = ["suite", suite, "user", USER, "date", now]
 
             # Run teuthology testrun process
-            run_main(
+            process(
                 config_file=CONFIG_FILE,
                 skip_drain3_templates=SKIP_DRAIN3_TEMPLATES,
                 segments=segments,
             )
     except Exception as exc:
-        LOG.error(f"[JOB ERROR] {exc}")
+        log.error(f"[TASK JOB ERROR] {exc}")
     finally:
-        LOG.debug("[JOB END]")
+        log.debug("[TASK JOB END]")
 
 
 def run_report():
@@ -80,26 +79,26 @@ def run_report():
     # Execute report method
     for branch in ["master", "squid", "tentacle"]:
         try:
-            LOG.debug(
+            log.debug(
                 f"[REPORT JOB START] branch={branch} | "
                 f"start_date={start_date} | end_date={end_date}"
             )
 
             # Run teuthology report process with date range
-            report_main(
+            publish_report(
                 config_file=CONFIG_FILE,
                 start_date=start_date,
                 end_date=end_date,
                 branch=branch,
                 sha_id=sha_id,
-                email_address=None,
+                address=None,
             )
         except Exception as exc:
-            LOG.error(f"[REPORT JOB ERROR] branch={branch} | error={exc}")
+            log.error(f"[REPORT JOB ERROR] branch={branch} | error={exc}")
             # Continue with the next branch
             continue
 
-    LOG.debug("[REPORT JOB END]")
+    log.debug("[REPORT JOB END]")
 
 
 def start_task_scheduler(tz):
@@ -122,7 +121,7 @@ def start_task_scheduler(tz):
 
     # Start scheduler
     scheduler.start()
-    LOG.debug(f"Task Scheduler started for TZ={TIMEZONE}")
+    log.debug(f"Task Scheduler started for TZ={TIMEZONE}")
 
     return scheduler
 
@@ -147,7 +146,7 @@ def start_report_scheduler(tz):
 
     # Start scheduler
     scheduler.start()
-    LOG.debug(f"Report Scheduler started for TZ={TIMEZONE}")
+    log.debug(f"Report Scheduler started for TZ={TIMEZONE}")
 
     return scheduler
 
@@ -156,12 +155,12 @@ def create_shutdown_handler(task_scheduler, report_scheduler):
     """Create shutdown handler"""
 
     def shutdown(signum, frame):
-        LOG.debug(f"Received signal {signum}. Shutting down schedulers...")
+        log.debug(f"Received signal {signum}. Shutting down schedulers...")
         try:
             task_scheduler.shutdown(wait=True)
             report_scheduler.shutdown(wait=True)
         except Exception as exc:
-            LOG.error(f"Error during scheduler shutdown: {exc}")
+            log.error(f"Error during scheduler shutdown: {exc}")
         finally:
             sys.exit(0)
 
@@ -180,7 +179,7 @@ def main():
     report_scheduler = start_report_scheduler(tz)
 
     # Log the scheduler start
-    LOG.debug(f"Schedulers started for TZ={TIMEZONE}")
+    log.debug(f"Schedulers started for TZ={TIMEZONE}")
 
     # Create shutdown handler for graceful termination
     shutdown_handler = create_shutdown_handler(
