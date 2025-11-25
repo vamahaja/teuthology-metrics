@@ -101,7 +101,6 @@ def main(config_file, skip_drain3_templates, segments):
 
 
 if __name__ == "__main__":
-
     # Parse command line arguments
     args = docopt(__doc__)
 
