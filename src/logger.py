@@ -6,7 +6,7 @@ LOG_FORMAT = (
 )
 
 
-class Log(logging.Logger):
+class Logger(logging.Logger):
     """teuthology metrics logger object to help streamline logging."""
 
     def __init__(self, name=None):

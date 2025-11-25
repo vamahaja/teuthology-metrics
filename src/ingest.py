@@ -4,44 +4,20 @@ from drain3 import TemplateMiner
 from drain3.file_persistence import FilePersistence
 from opensearchpy import OpenSearch
 
-from .utils import get_config, get_miner_config, get_snapshot_file
+from .config import (
+    get_opensearch_config,
+    get_miner_config,
+    get_snapshot_file,
+    get_index_config,
+)
 
-LOG = logging.getLogger("teuthology-metrics")
-INDEX_CONFIG = {
-    "runs": {
-        "name": "teuthology-runs",
-        "body": {
-            "settings": {
-                "index.mapping.total_fields.limit": 10000,
-                "index.mapping.ignore_malformed": True,
-            },
-        },
-    },
-    "jobs": {
-        "name": "teuthology-jobs",
-        "body": {
-            "settings": {
-                "index.mapping.total_fields.limit": 10000,
-                "index.mapping.ignore_malformed": True,
-            },
-        },
-    },
-    "patterns": {
-        "name": "teuthology-patterns",
-        "body": {
-            "settings": {
-                "index.mapping.total_fields.limit": 100,
-                "index.mapping.ignore_malformed": True,
-            },
-        },
-    },
-}
+log = logging.getLogger("teuthology-metrics")
 
 
-def get_configs(_config, server="opensearch"):
+def get_configs(_config):
     """Get OpenSearch configuration details"""
     # Get OpenSearch configuration
-    _config = get_config(_config, server)
+    _config = get_opensearch_config(_config)
 
     # Get base URL
     base_url = f"http://{_config['host']}"
@@ -57,7 +33,7 @@ def get_configs(_config, server="opensearch"):
 def get_template_miner(config):
     """Get Drain3 template miner instance"""
     file_path = get_snapshot_file(config)
-    LOG.debug(f"Reading drain3 snapshot file from {file_path}")
+    log.debug(f"Reading drain3 snapshot file from {file_path}")
 
     # Create persistence handler
     persistence_handler = FilePersistence(file_path=file_path)
@@ -67,7 +43,7 @@ def get_template_miner(config):
         config=get_miner_config(), persistence_handler=persistence_handler
     )
 
-    LOG.debug(
+    log.debug(
         f"Restored drain3 templates: {len(template_miner.drain.clusters)}"
     )
 
@@ -77,10 +53,10 @@ def get_template_miner(config):
 def connect(config):
     """Connect to OpenSearch instance"""
     # Get OpenSearch configuration
-    base_url, username, password = get_configs(config, "opensearch")
+    base_url, username, password = get_configs(config)
 
     # Connect to OpenSearch
-    LOG.info(f"Connecting to OpenSearch at {base_url} with user {username}")
+    log.info(f"Connecting to OpenSearch at {base_url} with user {username}")
     try:
         client = OpenSearch(
             base_url,
@@ -94,7 +70,7 @@ def connect(config):
             timeout=180,
         )
     except Exception as e:
-        LOG.error(f"Failed to connect to OpenSearch: {e}")
+        log.error(f"Failed to connect to OpenSearch: {e}")
         raise e
 
     return client
@@ -102,26 +78,25 @@ def connect(config):
 
 def create_index(client, index_name, body):
     """Create OpenSearch index"""
-    LOG.debug(f"Creating new index: {index_name}")
+    log.debug(f"Creating new index: {index_name}")
     if not client.indices.exists(index=index_name):
         try:
             client.indices.create(index=index_name, body=body)
         except Exception as e:
-            LOG.error(f"Error creating index in OpenSearch: {e}")
+            log.error(f"Error creating index in OpenSearch: {e}")
             raise e
 
-        LOG.debug(f"Created index: {index_name}")
+        log.debug(f"Created index: {index_name}")
         return
 
-    LOG.debug(f"Index already present: {index_name}")
+    log.debug(f"Index already present: {index_name}")
 
 
 def setup_opensearch(config):
     # Connect to OpenSearch
     client = connect(config)
-
-    for _index in INDEX_CONFIG:
-        index = INDEX_CONFIG.get(_index, {})
+    for _index in get_index_config().keys():
+        index = get_index_config().get(_index, {})
         if not index:
             raise ValueError(f"No config present for {index}")
 
@@ -133,14 +108,14 @@ def setup_opensearch(config):
 
 def insert_record(client, index, id, body):
     """Insert a document into OpenSearch"""
-    LOG.debug(f"Indexing document in OpenSearch: {index}/{id}")
+    log.debug(f"Indexing document in OpenSearch: {index}/{id}")
 
     # Insert the document in OpenSearch
     response = None
     try:
         response = client.index(index=index, id=id, body=body, refresh=True)
     except Exception as e:
-        LOG.error(f"Error indexing document in OpenSearch: {e}")
+        log.error(f"Error indexing document in OpenSearch: {e}")
         raise e
 
     # Check if the response is successful
@@ -153,19 +128,19 @@ def insert_failure_template(client, message, template_miner):
     failure_template = template_miner.add_log_message(message)
 
     # Insert failure template in patterns index
-    LOG.debug(
+    log.debug(
         "Inserting failure template for cluster id "
         f"{failure_template.get('cluster_id')} in OpenSearch"
     )
     try:
         insert_record(
             client,
-            INDEX_CONFIG.get("patterns").get("name"),
+            get_index_config().get("patterns").get("name"),
             failure_template.get("cluster_id"),
             {"failure_template": failure_template},
         )
     except Exception as e:
-        LOG.error(
+        log.error(
             f"Error: Failed to insert failure template for cluster id "
             f"{failure_template.get('cluster_id')} with error\n{str(e)}"
         )
@@ -176,11 +151,11 @@ def insert_failure_template(client, message, template_miner):
 def insert_job(client, job_id, job_data):
     """Insert a teuthology job in OpenSearch"""
     # Update job data
-    _index = INDEX_CONFIG.get("jobs").get("name")
+    _index = get_index_config().get("jobs").get("name")
     try:
         insert_record(client, _index, job_id, job_data)
     except Exception as e:
-        LOG.error(
+        log.error(
             f"Error: Failed to insert job job-id {job_id} with error\n{str(e)}"
         )
 
@@ -188,10 +163,21 @@ def insert_job(client, job_id, job_data):
 def insert_run(client, name, run_data):
     """Insert a teuthology run in OpenSearch"""
     # Insert runs to openserach
-    _index = INDEX_CONFIG.get("runs").get("name")
+    _index = get_index_config().get("runs").get("name")
     try:
         insert_record(client, _index, name, run_data)
     except Exception as e:
-        LOG.error(
+        log.error(
             f"Error: Failed to insert run for {name} with error\n{str(e)}"
+        )
+
+
+def query(client, query, index, size=1000):
+    """Search data for given query"""
+    query = {"query": query}
+    try:
+        client.search(index=index, body=query, size=size)
+    except Exception as e:
+        log.error(
+            f"Error: Failed to search query {query} with error\n{str(e)}"
         )

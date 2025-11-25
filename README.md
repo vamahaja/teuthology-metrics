@@ -1,81 +1,96 @@
 # teuthology-metrics
-This document deploys opensearch for processing test run results data from paddles through OpenSearch.
+
+`teuthology-metrics` is a toolset designed to process and analyze Teuthology test run results using OpenSearch. It indexes test data to allow rich querying and generates summarized reports that can be emailed to stakeholders.
+
+This project is designed to provide deeper insights and uncover historical trends for users working with Ceph's Teuthology test framework, enabling a more comprehensive understanding and analysis of their test run data.
+
+## Features
+- Ingest Teuthology test run results into OpenSearch indices for fast search and analytics.
+- Generate and email test summary reports for specified branches, time periods, and commit SHAs.
+- Flexible logging options for debugging and monitoring.
+- PEP 8 code style enforcement using Ruff.
 
 ## Getting Started
 
-## Prerequisites
+### Prerequisites
 
-- [Podman](https://podman.io/getting-started/installation) installed
-- [Podman Compose](https://github.com/containers/podman-compose) installed
-- Clone this repository
+- [uv](https://docs.astral.sh/uv/getting-started/installation) CLI installed for running scripts and managing dependencies.
+- OpenSearch DB & Dashboard deployed and accessible (see [deployment documentation](https://github.com/vamahaja/teuthology-metrics/tree/main/deployments/README.md)).
+- A configured `config.cfg` file with settings such as OpenSearch endpoint, user credentials, email SMTP server, and other required details.
 
-## Deployment Steps
+### Configuration file (`config.cfg`)
 
-1. **Create required directories**
-    ```sh
-    mkdir -p /data/{opensearch,dashboards,scheduler}
-    ```
+Create a `config.cfg` with necessary configuration parameters. An example minimal configuration might include:
+```
+[paddle]
+host = your-paddle-hostname
+port = your-paddle-port
 
-2. **Create `config.cfg` with `paddle` and `opensearch` details in `/data/scheduler`**
+[opensearch]
+host = your-opensearch-hostname
+port = your-opensearch-port
+user = your_user
+password = your_password
 
-3. **Change directory permissions**
-    ```sh
-    sudo chown -R 1000:1000 /data && sudo chcon -Rt container_file_t /data
-    ```
+[email]
+host = smtp.example.com
+port = 587
+username = your_username
+password = your_email_password
+sender = your_email@example.com
 
-4. **Build scheduler container image**
-    ```sh
-    podman build -t scheduler-app:latest .
-    ```
+[report]
+opensearch_index = opensearch_index
+results_server = results_server_url
+```
 
-5. **Start the services**
-    ```sh
-    OPENSEARCH_INITIAL_ADMIN_PASSWORD='<passwd>' podman-compose up -d
-    ```
+## Usage
 
-6. **Verify the deployment**
-    ```sh
-    podman-compose ps
-    ```
-    
-    All three containers should show "Up" status.
+### Update OpenSearch with test runs
 
-7. **Access OpenSearch Dashboards**
-    - Open browser: `http://localhost:5601`
-    - Username: `admin`
-    - Password: The password you set in step 5
+Ingest test results for a specific user, suite, and date:
+```sh 
+uv run python runner.py \
+  --config config.cfg \
+  --user teuthology \
+  --suite smoke \
+  --date 2025-11-21
+```
 
-## Configuration
+### Trigger report email
 
-- Edit the `container-compose.yml` file to adjust environment variables or service settings as needed
+Send summary reports for a branch over a date range via email:
+```sh
+uv run python scheduler.py \
+  --config config.cfg \
+  --branch main \
+  --start-date 2025-11-21 \
+  --end-date 2025-11-23 \
+  --email-address vaibhavsm04@gmail.com \
+  --sha-id a6c7445ba1ccce82c5afae9856e2fa4ea693cd86
+```
 
-## Stopping the Services
+### Logging options
 
-- To stop and remove the containers, run
+Add these optional flags to increase log detail and save logs in a specific directory: 
+```sh
+  uv run python runner.py \
+    --config config.cfg \
+    --user teuthology \
+    --suite smoke \
+    --date 2025-11-21 \
+    --log-level debug \
+    --log-path ./logs
+```
+
+## Development
+
+This project uses [Ruff](https://docs.astral.sh/ruff) as the Python linter to enforce PEP 8 rules.
+- Check all files:
   ```sh
-  podman-compose down
+  uv run ruff check .
   ```
-
-## Troubleshooting
-
-- Check logs with:
+- Check a single file:
   ```sh
-  podman-compose logs
+  uv run ruff check <absolute_or_relative_file_path>
   ```
-
-## Update OpenSearch with test runs manually
-
-- Create `config.cfg` with `paddle` and `opensearch`
-- Update test results for `main` branch & `smoke` suite for date `July 31st, 2025` and executed by user `teuthology` to OpenSearch
-  ```sh 
-  python run.py \
-    --config=config.cfg \
-    --user=teuthology \
-    --suite=smoke \
-    --date=2025-07-31
-  ```
-
-## Additional Resources
-
-- [Podman Compose Documentation](https://github.com/containers/podman-compose)
-- [Project Wiki](../docs/)

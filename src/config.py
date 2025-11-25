@@ -1,16 +1,11 @@
 import configparser
-import datetime
-import json
 import logging
 import os
-import tempfile
 
 from drain3.masking import MaskingInstruction
 from drain3.template_miner_config import TemplateMinerConfig
 
-from .log import LOG_FORMAT, Log
-
-LOG = logging.getLogger("teuthology-metrics")
+log = logging.getLogger("teuthology-metrics")
 
 
 def read_config(_file):
@@ -18,7 +13,7 @@ def read_config(_file):
     if not os.path.exists(_file):
         raise FileNotFoundError(f"Config file '{_file}' not found.")
 
-    LOG.info(f"Reading config file: {_file}")
+    log.info(f"Reading config file: {_file}")
 
     # Read the config file
     config = configparser.ConfigParser()
@@ -30,125 +25,60 @@ def read_config(_file):
     return config
 
 
-def write_json(_file, _json):
-    """Write data to a JSON file"""
-    LOG.info(f"Writing data to {_file}")
-
-    # Open the file and write the json
-    with open(_file, "w") as _f:
-        json.dump(_json, _f, indent=2)
-
-
-def read_json(_file):
-    """Read json from file"""
-    # Check if the json file exists
-    if not os.path.exists(_file):
-        raise FileNotFoundError(f"Json file '{_file}' not found.")
-
-    LOG.info(f"Reading json from {_file}")
-
-    # Open the file and read the json
-    with open(_file, "r") as _f:
-        return json.load(_f)
-
-
-def write_data(_file, _data):
-    """Write data to a file"""
-    LOG.info(f"Writing data to {_file}")
-
-    # Open the file and write data
-    with open(_file, "w") as _f:
-        _f.write(_data)
-
-
-def batchify(items, batch_size=1000):
-    """Iterate over list for given batch size"""
-    # Set up an empty batch
-    batch = []
-
-    # Iterate over items and yield batches
-    for item in items:
-        batch.append(item)
-        if len(batch) == batch_size:
-            yield batch
-            batch = []
-
-    # Yield the last batch if it has items
-    if batch:
-        yield batch
-
-
-def get_backup_location(_file):
-    """Get backup location from config"""
-    config = get_config(_file)
-
-    # Check if the backup location is provided
-    if "backup" not in config:
-        raise ValueError("Section 'backup' not found in configuration file.")
-
-    # Check if backup location is provided
-    _config = config["backup"]
-    if not _config.get("backup_location"):
-        raise ValueError(
-            "Backup location not found in 'backup' configuration file."
-        )
-
-    return _config.get("backup_location")
-
-
-def get_config(_file, server):
-    """Get configuration details"""
-    # Read the config file
-    _config, config = {}, read_config(_file)
-
-    # Check if the server details exists
-    if server not in config:
-        raise ValueError(
-            f"Section '{server}' not found in configuration file."
-        )
-
-    # Get the host and port from the config
-    _config["host"] = config[server].get("HOST")
-    if not _config["host"]:
-        raise ValueError("Host not found in configuration file.")
-
-    # Get the port from the config
-    _config["port"] = config[server].get("PORT")
-
-    # Get the username and password from the config
-    if server == "opensearch":
-        _config["username"] = config[server].get("USERNAME")
-        _config["password"] = config[server].get("PASSWORD")
-        if not _config["username"] or not _config["password"]:
-            raise ValueError(
-                "Username and password not found in configuration file."
-            )
-
-    return _config
-
-
-def get_email_config(_file):
-    """Get configuration details"""
+def get_opensearch_config(_file):
+    """Get OpenSeach configuration details"""
     # Read the config file
     config = read_config(_file)
-    if "email" not in config:
-        raise ValueError("Section 'email' not found in configuration file.")
+    if "opensearch" not in config:
+        raise ValueError(
+            "Section 'opensearch' not found in configuration file."
+        )
 
     # Convert the section to a dict
-    email_section = dict(config["email"])
+    opensearch_section = dict(config["opensearch"])
 
-    required_keys = [
-        "email_from",
-        "host",
-        "port",
-        "opensearch_index",
-        "results_server",
-    ]
-    for key in required_keys:
-        if not email_section.get(key):
-            raise ValueError(f"Email config missing required key: {key}")
+    # Check for required keys
+    for key in ["host", "port", "username", "password"]:
+        if not opensearch_section.get(key):
+            raise ValueError(f"OpenSearch config missing required key: {key}")
 
-    return email_section
+    return opensearch_section
+
+
+def get_paddle_config(_file):
+    """Get paddle configuration details"""
+    # Read the config file
+    config = read_config(_file)
+    if "paddle" not in config:
+        raise ValueError("Section 'paddle' not found in configuration file.")
+
+    # Convert the section to a dict
+    paddle_section = dict(config["paddle"])
+
+    # Check for required keys
+    for key in ["host", "port"]:
+        if not paddle_section.get(key):
+            raise ValueError(f"Paddle config missing required key: {key}")
+
+    return paddle_section
+
+
+def get_smtp_config(_file):
+    """Get SMTP server configuration details"""
+    # Read the config file
+    config = read_config(_file)
+    if "smtp" not in config:
+        raise ValueError("Section 'smtp' not found in configuration file.")
+
+    # Convert the section to a dict
+    _section = dict(config["smtp"])
+
+    # Check for mandatory keys
+    for key in ["host", "port", "sender"]:
+        if not _section.get(key):
+            raise ValueError(f"SMTP Server config missing required key {key}")
+
+    return _section
 
 
 def get_snapshot_file(_file):
@@ -176,6 +106,42 @@ def get_snapshot_file(_file):
     )
 
     return file_path
+
+
+def get_backup_location(_file):
+    """Get backup location from config"""
+    config = read_config(_file)
+
+    # Check if the backup location is provided
+    if "backup" not in config:
+        raise ValueError("Section 'backup' not found in configuration file.")
+
+    # Check if backup location is provided
+    _config = config["backup"]
+    if not _config.get("backup_location"):
+        raise ValueError(
+            "Backup location not found in 'backup' configuration file."
+        )
+
+    return _config.get("backup_location")
+
+
+def get_report_config(_file):
+    """Get email report configs"""
+    # Read the config file
+    config = read_config(_file)
+    if "report" not in config:
+        raise ValueError("Section 'report' not found in configuration file.")
+
+    # Convert the section to a dict
+    _section = dict(config["report"])
+
+    # Check for mandatory keys
+    for key in ["opensearch_index", "results_server"]:
+        if not _section.get(key):
+            raise ValueError(f"Report config missing required key {key}")
+
+    return _section
 
 
 def get_miner_config():
@@ -268,43 +234,34 @@ def get_miner_config():
     return config
 
 
-def set_logging_env(level=None, path=None):
-    """
-    Set up logging environment.
-
-    Parameters:
-    level (str): Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-                    Default is DEBUG.
-    path (str): Log directory path. Default is a temporary directory.
-
-    Returns:
-    Log: Log object.
-    """
-
-    log = Log()
-
-    for handler in log.logger.handlers[:]:
-        handler.close()
-        log.logger.removeHandler(handler)
-    LOG.info("Setting up logging environment")
-    level = level.upper() if level else "DEBUG"
-    log.logger.setLevel(level)
-    LOG.info(f"Log level set to: {level}")
-    if not path:
-        path = os.path.join(tempfile.gettempdir(), "teuthology-metrics-logs")
-        LOG.info(f"Generating log directory: {path}")
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-    name = "teuthology-metrics"
-    path = os.path.join(
-        path, f"{name}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
-    )
-    LOG.info(f"Log path: {path}")
-
-    formatter = logging.Formatter(LOG_FORMAT)
-    file_handler = logging.FileHandler(path)
-    file_handler.setFormatter(formatter)
-    log.logger.addHandler(file_handler)
-
-    return log
+def get_index_config():
+    """Gets OpenSeach index configs"""
+    return {
+        "runs": {
+            "name": "teuthology-runs",
+            "body": {
+                "settings": {
+                    "index.mapping.total_fields.limit": 10000,
+                    "index.mapping.ignore_malformed": True,
+                },
+            },
+        },
+        "jobs": {
+            "name": "teuthology-jobs",
+            "body": {
+                "settings": {
+                    "index.mapping.total_fields.limit": 10000,
+                    "index.mapping.ignore_malformed": True,
+                },
+            },
+        },
+        "patterns": {
+            "name": "teuthology-patterns",
+            "body": {
+                "settings": {
+                    "index.mapping.total_fields.limit": 100,
+                    "index.mapping.ignore_malformed": True,
+                },
+            },
+        },
+    }
