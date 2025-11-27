@@ -50,6 +50,18 @@ services:
     networks:
       - opensearch-net
 
+  dashboard-import:
+    image: dashboard-import:latest
+    container_name: dashboard-import
+    environment:
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+    depends_on:
+      - opensearch
+      - dashboards
+    networks:
+      - opensearch-net
+    restart: "no"
+
 volumes:
   opensearch-data:
     driver: local

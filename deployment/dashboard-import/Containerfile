@@ -1,0 +1,14 @@
+FROM curlimages/curl:latest
+
+# Set working directory
+WORKDIR /app
+
+# Copy import script to app directory (as curl_user)
+COPY --chmod=755 deployment/dashboard-import/entrypoint.sh .
+
+# Copy all dashboard templates to app directory
+COPY templates .
+
+# Run the import script as curl_user (non-root)
+ENTRYPOINT ["./entrypoint.sh"]
+
