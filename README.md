@@ -15,7 +15,7 @@ This project is designed to provide deeper insights and uncover historical trend
 ### Prerequisites
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation) CLI installed for running scripts and managing dependencies.
-- OpenSearch DB & Dashboard deployed and accessible (see [deployment documentation](https://github.com/vamahaja/teuthology-metrics/tree/main/deployments/README.md)).
+- OpenSearch DB & Dashboard deployed and accessible (see [deployment documentation](https://github.com/vamahaja/teuthology-metrics/tree/main/deployment/README.md)).
 - A configured `config.cfg` file with settings such as OpenSearch endpoint, user credentials, email SMTP server, and other required details.
 
 ### Configuration file (`config.cfg`)
