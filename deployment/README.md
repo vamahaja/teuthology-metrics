@@ -25,7 +25,7 @@ This document deploys opensearch for processing test run results data from paddl
 
 4. **Build scheduler container image**
     ```sh
-    podman build -t scheduler-app:latest .
+    podman build -f deployment/Containerfile -t scheduler-app:latest .
     ```
 
 5. **Start the services**
@@ -53,14 +53,14 @@ This document deploys opensearch for processing test run results data from paddl
 
 - To stop and remove the containers, run
   ```sh
-  podman-compose down
+  podman-compose -f deployment/podman-compose.yaml down
   ```
 
 ## Troubleshooting
 
 - Check logs with:
   ```sh
-  podman-compose logs
+  podman-compose -f deployment/podman-compose.yaml logs
   ```
 
 ## Additional Resources
