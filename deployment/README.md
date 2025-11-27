@@ -23,9 +23,14 @@ This document deploys opensearch for processing test run results data from paddl
     sudo chown -R 1000:1000 /data && sudo chcon -Rt container_file_t /data
     ```
 
-4. **Build scheduler container image**
+4. **Build container images**
     ```sh
+
+    # Scheduler image
     podman build -f deployment/Containerfile -t scheduler-app:latest .
+    
+    # Dashboard-import image
+    podman build -f deployment/dashboard-import/Containerfile -t dashboard-import:latest .
     ```
 
 5. **Start the services**
@@ -35,7 +40,7 @@ This document deploys opensearch for processing test run results data from paddl
 
 6. **Verify the deployment**
     ```sh
-    podman-compose ps
+    podman-compose -f deployment/podman-compose.yaml ps
     ```
     
     All three containers should show "Up" status.
