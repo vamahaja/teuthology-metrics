@@ -1,37 +1,9 @@
 import logging
-
-from drain3 import TemplateMiner
-from drain3.file_persistence import FilePersistence
 from opensearchpy import OpenSearch
 
-from .config import (
-    get_opensearch_config,
-    get_miner_config,
-    get_snapshot_file,
-    get_index_config,
-)
+from .config import get_opensearch_config
 
 log = logging.getLogger("teuthology-metrics")
-
-
-def get_template_miner(config):
-    """Get Drain3 template miner instance"""
-    file_path = get_snapshot_file(config)
-    log.debug(f"Reading drain3 snapshot file from {file_path}")
-
-    # Create persistence handler
-    persistence_handler = FilePersistence(file_path=file_path)
-
-    # Get template miner config
-    template_miner = TemplateMiner(
-        config=get_miner_config(), persistence_handler=persistence_handler
-    )
-
-    log.debug(
-        f"Restored drain3 templates: {len(template_miner.drain.clusters)}"
-    )
-
-    return template_miner
 
 
 def connect(config):
@@ -165,3 +137,36 @@ def query(client, query, index, size=1000):
         log.error(
             f"Error: Failed to search query {query} with error\n{str(e)}"
         )
+
+
+def get_index_config():
+    """Gets OpenSeach index configs"""
+    return {
+        "runs": {
+            "name": "teuthology-runs",
+            "body": {
+                "settings": {
+                    "index.mapping.total_fields.limit": 10000,
+                    "index.mapping.ignore_malformed": True,
+                },
+            },
+        },
+        "jobs": {
+            "name": "teuthology-jobs",
+            "body": {
+                "settings": {
+                    "index.mapping.total_fields.limit": 10000,
+                    "index.mapping.ignore_malformed": True,
+                },
+            },
+        },
+        "patterns": {
+            "name": "teuthology-patterns",
+            "body": {
+                "settings": {
+                    "index.mapping.total_fields.limit": 100,
+                    "index.mapping.ignore_malformed": True,
+                },
+            },
+        },
+    }

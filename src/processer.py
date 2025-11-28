@@ -11,13 +11,13 @@ from .fetcher import (
 )
 from .ingest import (
     connect as opensearch_connect,
-    get_template_miner,
     insert_failure_template,
     insert_job,
     insert_run,
     query,
     setup_opensearch,
 )
+from .miner import get_template_miner
 from .utils import send_email
 
 # Set email subject template
