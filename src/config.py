@@ -35,14 +35,20 @@ def get_opensearch_config(_file):
         )
 
     # Convert the section to a dict
-    opensearch_section = dict(config["opensearch"])
+    _section = dict(config["opensearch"])
 
     # Check for required keys
-    for key in ["host", "port", "username", "password"]:
-        if not opensearch_section.get(key):
+    for key in ["api_url", "username", "password"]:
+        if not _section.get(key):
             raise ValueError(f"OpenSearch config missing required key: {key}")
 
-    return opensearch_section
+    return (
+        _section["api_url"],
+        _section["username"],
+        _section["password"],
+        _section.get("retries", 10),
+        _section.get("timeout", 180),
+    )
 
 
 def get_paddle_config(_file):
@@ -53,14 +59,14 @@ def get_paddle_config(_file):
         raise ValueError("Section 'paddle' not found in configuration file.")
 
     # Convert the section to a dict
-    paddle_section = dict(config["paddle"])
+    _section = dict(config["paddle"])
 
     # Check for required keys
-    for key in ["host", "port"]:
-        if not paddle_section.get(key):
+    for key in ["api_url"]:
+        if not _section.get(key):
             raise ValueError(f"Paddle config missing required key: {key}")
 
-    return paddle_section
+    return _section["api_url"], _section.get("timeout", 10.0)
 
 
 def get_smtp_config(_file):

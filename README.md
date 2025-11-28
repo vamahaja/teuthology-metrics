@@ -23,12 +23,10 @@ This project is designed to provide deeper insights and uncover historical trend
 Create a `config.cfg` with necessary configuration parameters. An example minimal configuration might include:
 ```
 [paddle]
-host = your-paddle-hostname
-port = your-paddle-port
+api_url = your-paddle-endpoint
 
 [opensearch]
-host = your-opensearch-hostname
-port = your-opensearch-port
+api_url = your-opensearch-endpoint
 user = your_user
 password = your_password
 

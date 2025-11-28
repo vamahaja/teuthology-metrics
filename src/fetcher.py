@@ -9,17 +9,14 @@ from .config import get_paddle_config
 log = logging.getLogger("teuthology-metrics")
 
 
-def get_paddle_baseurl(_config):
-    """Get the base URL for the Paddle server"""
-    _config = get_paddle_config(_config)
-    base_url = f"http://{_config['host']}"
-
-    if _config["port"]:
-        base_url += f":{_config['port']}"
-
-    log.info(f"Paddle server URL: {base_url}")
-
-    return base_url
+def connect(config):
+    """Check paddle server connectivity"""
+    api_url, timeout = get_paddle_config(config)
+    try:
+        requests.head(api_url, timeout=timeout)
+        return api_url
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"API not accessible: {exc}") from exc
 
 
 def get_data(url):

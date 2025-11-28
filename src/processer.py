@@ -5,12 +5,12 @@ from jinja2 import Template
 
 from .config import get_report_config
 from .fetcher import (
+    connect as paddle_connect,
     get_data,
-    get_paddle_baseurl,
     get_runs,
 )
 from .ingest import (
-    connect,
+    connect as opensearch_connect,
     get_template_miner,
     insert_failure_template,
     insert_job,
@@ -66,8 +66,8 @@ def update_runs(client, run, template_miner):
 
 
 def process(config_file, skip_drain3_templates, segments):
-    # Get paddle base URL
-    base_url = get_paddle_baseurl(config_file)
+    # Get paddle api URL
+    api_url = paddle_connect(config_file)
 
     # Get Drain3 templates flag
     template_miner = None
@@ -78,7 +78,7 @@ def process(config_file, skip_drain3_templates, segments):
     client = setup_opensearch(config_file)
 
     # Fetch jobs for the given teuthology runs
-    for run in get_runs(base_url, segments):
+    for run in get_runs(api_url, segments):
         log.debug(f"Processing run: {run.get('name')}")
 
         # Update run metadata
@@ -210,7 +210,7 @@ def publish_report(
     )
 
     # Connect to OpenSearch client
-    client = connect(config_file)
+    client = opensearch_connect(config_file)
 
     # Fetch data for the given branch and date range
     hits = query_data(
