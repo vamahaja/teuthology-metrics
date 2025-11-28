@@ -14,22 +14,6 @@ from .config import (
 log = logging.getLogger("teuthology-metrics")
 
 
-def get_configs(_config):
-    """Get OpenSearch configuration details"""
-    # Get OpenSearch configuration
-    _config = get_opensearch_config(_config)
-
-    # Get base URL
-    base_url = f"http://{_config['host']}"
-
-    # Append port if specified
-    if _config["port"]:
-        base_url += f":{_config['port']}"
-
-    # Get baseurl, username and password
-    return base_url, _config["username"], _config["password"]
-
-
 def get_template_miner(config):
     """Get Drain3 template miner instance"""
     file_path = get_snapshot_file(config)
@@ -53,21 +37,21 @@ def get_template_miner(config):
 def connect(config):
     """Connect to OpenSearch instance"""
     # Get OpenSearch configuration
-    base_url, username, password = get_configs(config)
+    api_url, username, password, retries, timeout = get_opensearch_config(config)
 
     # Connect to OpenSearch
-    log.info(f"Connecting to OpenSearch at {base_url} with user {username}")
+    log.info(f"Connecting to OpenSearch at {api_url} with user {username}")
     try:
         client = OpenSearch(
-            base_url,
+            api_url,
             http_auth=(username, password),
+            max_retries=retries,
+            timeout=timeout,
             use_ssl=False,
             verify_certs=False,
             ssl_assert_hostname=False,
             ssl_show_warn=False,
             retry_on_timeout=True,
-            max_retries=5,
-            timeout=180,
         )
     except Exception as e:
         log.error(f"Failed to connect to OpenSearch: {e}")
