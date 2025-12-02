@@ -40,6 +40,13 @@ sender = your_email@example.com
 [report]
 opensearch_index = opensearch_index
 results_server = results_server_url
+
+[scheduler]
+branches = <ceph-branches>
+suites = <ceph-teuthology-suites>, ....
+cron_report = <report-cron-expr>
+cron_task = <task-cron-expr>
+email = <your-email-addr>
 ```
 
 ## Usage
@@ -59,13 +66,23 @@ uv run python runner.py \
 
 Send summary reports for a branch over a date range via email:
 ```sh
-uv run python scheduler.py \
+uv run python report.py \
   --config config.cfg \
   --branch main \
   --start-date 2025-11-21 \
   --end-date 2025-11-23 \
   --email-address vaibhavsm04@gmail.com \
   --sha-id a6c7445ba1ccce82c5afae9856e2fa4ea693cd86
+```
+
+### Start scheduler
+
+Start scheduler for teuthology triggered runs
+```sh
+uv run python scheduler.py \
+  --config config.cfg \
+  --sha1-path ./sha1 \
+  --user teuthology
 ```
 
 ### Logging options

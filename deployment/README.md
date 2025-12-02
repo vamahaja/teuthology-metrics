@@ -33,19 +33,27 @@ This document deploys opensearch for processing test run results data from paddl
     podman build -f deployment/dashboard-import/Containerfile -t dashboard-import:latest .
     ```
 
-5. **Start the services**
+5. **Create environment file with OpenSearch & Scheduler configs**
     ```sh
-    OPENSEARCH_INITIAL_ADMIN_PASSWORD='<passwd>' podman-compose -f deployment/podman-compose.yaml up -d
+    cat <<'EOF' > .env
+    OPENSEARCH_INITIAL_ADMIN_PASSWORD='<passwd>'
+    APP_ARGS='--config /usr/share/config.cfg --sha1-path /usr/share/sha1 --user teuthology'
+    EOF
     ```
 
-6. **Verify the deployment**
+6. **Start the services**
+    ```sh
+     podman-compose --env-file .env -f deployment/podman-compose.yaml up -d
+    ```
+
+7. **Verify the deployment**
     ```sh
     podman-compose -f deployment/podman-compose.yaml ps
     ```
     
     All three containers should show "Up" status.
 
-7. **Access OpenSearch Dashboards**
+8. **Access OpenSearch Dashboards**
     - Open browser: `http://localhost:5601`
     - Username: `admin`
     - Password: The password you set in step 5

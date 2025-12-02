@@ -1,9 +1,9 @@
 import logging
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jinja2 import Template
 
-from .config import get_report_config
+from .config import get_report_config, get_scheduler_config
 from .fetcher import (
     connect as paddle_connect,
     get_data,
@@ -228,3 +228,72 @@ def publish_report(
     # Set email subject & send the email with the report
     subject = EMAIL_SUBJECT_FORMAT.format(end_date=end_date, branch=branch)
     send_email(config_file, subject, html_content, address)
+
+
+def run_task(config_file, user, skip_drain3_templates):
+    """Run teuthology testrun process"""
+    # Get current date
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Get teuthology suites
+    suites = get_scheduler_config(config_file).get("suites")
+
+    # Execute run method
+    try:
+        for suite in suites:
+            log.debug(f"[TASK JOB START] suite={suite} | date={now}")
+
+            # Set paddle variables
+            segments = ["suite", suite, "user", user, "date", now]
+
+            # Run teuthology testrun process
+            process(
+                config_file=config_file,
+                skip_drain3_templates=skip_drain3_templates,
+                segments=segments,
+            )
+    except Exception as exc:
+        log.error(f"[TASK JOB ERROR] {exc}")
+    finally:
+        log.debug("[TASK JOB END]")
+
+
+def run_report(config_file, cron_dir):
+    """Run teuthology report process"""
+    # Get current date (Monday)
+    now = datetime.now(timezone.utc)
+    end_date = now.strftime("%Y-%m-%d")
+
+    # Calculate date ranage
+    schedule_date = now - timedelta(days=3)
+    start_date = schedule_date.strftime("%Y-%m-%d")
+    sha_id = open(f"{cron_dir}/{start_date}").read().strip()
+
+    # Get configs
+    _config = get_scheduler_config(config_file)
+
+    # Execute report method
+    branches, email = _config.get("branches"), _config.get("email")
+    for branch in branches:
+        try:
+            log.debug(
+                f"[REPORT JOB START] branch={branch} | "
+                f"start_date={start_date} | end_date={end_date}"
+            )
+
+            # Run teuthology report process with date range
+            publish_report(
+                config_file=config_file,
+                start_date=start_date,
+                end_date=end_date,
+                branch=branch,
+                sha_id=sha_id,
+                address=email,
+            )
+        except Exception as exc:
+            log.error(f"[REPORT JOB ERROR] branch={branch} | error={exc}")
+
+            # Continue with the next branch
+            continue
+
+    log.debug("[REPORT JOB END]")
