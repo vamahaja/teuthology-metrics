@@ -42,8 +42,11 @@ services:
   scheduler:
     image: scheduler-app:latest
     container_name: scheduler
+    environment:
+      APP_ARGS: ${APP_ARGS:-"--config /usr/share/config.cfg --sha1-path /usr/share/sha1 --user teuthology"}
+    command: []
     volumes:
-      - scheduler-data:/usr/share/scheduler:Z
+      - scheduler-data:/usr/share:Z
     depends_on:
       - opensearch
       - dashboards

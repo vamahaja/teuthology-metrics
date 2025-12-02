@@ -145,3 +145,27 @@ def get_report_config(_file):
             raise ValueError(f"Report config missing required key {key}")
 
     return _section
+
+def get_scheduler_config(_file):
+    """Get scheduler configs"""
+    # Read the config file
+    config = read_config(_file)
+    if "scheduler" not in config:
+        raise ValueError("Section 'scheduler' not found in configuration file.")
+
+    # Convert the section to a dict
+    _section = dict(config["scheduler"])
+
+    # Check for mandatory keys
+    _keys = [
+        "branches",
+        "suites",
+        "cron_report",
+        "cron_task",
+        "email",
+    ]
+    for key in _keys:
+        if not _section.get(key):
+            raise ValueError(f"Scheduler config missing required key {key}")
+
+    return _section

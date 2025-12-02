@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-project --no-dev
 
 # Copy the rest of the application code
-COPY src .
+COPY src/ ./src/
 COPY scheduler.py .
 
 # Re-sync in frozen mode to ensure consistency with the lock file
@@ -46,3 +46,4 @@ USER appuser
 
 # Execute scheduler
 ENTRYPOINT ["python", "scheduler.py"]
+CMD ["--config", "/usr/share/config.cfg", "--sha1-path", "/usr/share/sha1", "--user", "teuthology"]
