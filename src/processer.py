@@ -1,7 +1,11 @@
 import logging
+import os
 
 from datetime import datetime, timedelta, timezone
 from jinja2 import Template
+
+# Get the directory containing this file, then navigate to templates
+_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 
 from .config import get_report_config, get_scheduler_config
 from .fetcher import (
@@ -121,7 +125,8 @@ def query_data(client, branch, start_date, end_date, index, sha_id=None):
                 }
             }
         response = query(client, _query, index)
-        all_hits.extend(response["hits"]["hits"])
+        if response and "hits" in response:
+            all_hits.extend(response["hits"]["hits"])
         current += timedelta(days=1)
 
     return all_hits
@@ -179,7 +184,7 @@ def teuthology_report(
         )
 
     # Load the HTML template and render it with data
-    with open("../templates/report.j2") as f:
+    with open(os.path.join(_TEMPLATES_DIR, "report.j2")) as f:
         html_template = Template(f.read())
 
     return html_template.render(
