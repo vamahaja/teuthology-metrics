@@ -132,11 +132,12 @@ def query(client, query, index, size=1000):
     """Search data for given query"""
     query = {"query": query}
     try:
-        client.search(index=index, body=query, size=size)
+        return client.search(index=index, body=query, size=size)
     except Exception as e:
         log.error(
             f"Error: Failed to search query {query} with error\n{str(e)}"
         )
+        return None
 
 
 def get_index_config():
