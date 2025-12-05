@@ -167,5 +167,10 @@ def get_scheduler_config(_file):
     for key in _keys:
         if not _section.get(key):
             raise ValueError(f"Scheduler config missing required key {key}")
+        
+    # Parse comma-separated values into lists
+    _section["branches"] = [b.strip() for b in _section["branches"].split(",")]
+    _section["suites"] = [s.strip() for s in _section["suites"].split(",")]
+
 
     return _section
