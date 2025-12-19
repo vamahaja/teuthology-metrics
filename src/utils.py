@@ -14,13 +14,15 @@ from .logger import LOG_FORMAT, Logger
 log = logging.getLogger("teuthology-metrics")
 
 
-def set_logging_env(level=None, path=None):
+def set_logging_env(level=None, path=None, job_type=None):
     """Set up logging environment.
 
     Args:
         level (str): Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
                         Default is DEBUG.
         path (str): Log directory path. Default is a temporary directory.
+        job_type (str): Optional job type identifier (e.g., 'task', 'report')
+                        to include in log filename.
 
     Returns:
         Log: Log object.
@@ -41,10 +43,15 @@ def set_logging_env(level=None, path=None):
         if not os.path.exists(path):
             os.makedirs(path)
 
+    # Build log filename with optional job type
     name = "teuthology-metrics"
-    path = os.path.join(
-        path, f"{name}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
-    )
+    timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+    if job_type:
+        log_filename = f"{name}-{job_type}-{timestamp}.log"
+    else:
+        log_filename = f"{name}-{timestamp}.log"
+    
+    path = os.path.join(path, log_filename)
     log.info(f"Log path: {path}")
 
     formatter = logging.Formatter(LOG_FORMAT)
