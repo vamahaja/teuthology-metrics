@@ -42,9 +42,10 @@ services:
   scheduler:
     image: scheduler-app:latest
     container_name: scheduler
+    entrypoint: []
+    command: ["/bin/sh", "-c", "python scheduler.py ${APP_ARGS}"]
     environment:
       APP_ARGS: ${APP_ARGS:-"--config /usr/share/config.cfg --sha1-path /usr/share/sha1 --user teuthology"}
-    command: []
     volumes:
       - scheduler-data:/usr/share:Z
     depends_on:
