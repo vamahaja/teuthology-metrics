@@ -20,7 +20,7 @@ This document deploys opensearch for processing test run results data from paddl
 
 3. **Change directory permissions**
     ```sh
-    sudo chown -R 1000:1000 /data && sudo chcon -Rt container_file_t /data
+    sudo chown -R 1001:1001 /data && sudo chcon -Rt container_file_t /data
     ```
 
 4. **Build container images**
