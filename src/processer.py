@@ -22,7 +22,7 @@ from .ingest import (
     setup_opensearch,
 )
 from .miner import get_template_miner
-from .utils import send_email
+from .utils import send_email, set_logging_env
 
 # Set email subject template
 EMAIL_SUBJECT_FORMAT = "Teuthology Test Summary - {end_date} - {branch}"
@@ -235,8 +235,11 @@ def publish_report(
     send_email(config_file, subject, html_content, address)
 
 
-def run_task(config_file, user, skip_drain3_templates):
+def run_task(config_file, user, skip_drain3_templates, log_level=None, log_path=None):
     """Run teuthology testrun process"""
+    # Create new log file for this cron execution
+    set_logging_env(level=log_level, path=log_path, job_type="task")
+
     # Get current date
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -263,8 +266,11 @@ def run_task(config_file, user, skip_drain3_templates):
         log.debug("[TASK JOB END]")
 
 
-def run_report(config_file, cron_dir):
+def run_report(config_file, cron_dir, log_level=None, log_path=None):
     """Run teuthology report process"""
+    # Create new log file for this cron execution
+    set_logging_env(level=log_level, path=log_path, job_type="report")
+
     # Get current date (Monday)
     now = datetime.now(timezone.utc)
     end_date = now.strftime("%Y-%m-%d")

@@ -37,7 +37,7 @@ MAX_INSTANCES = 1
 log = logging.getLogger("teuthology-metrics")
 
 
-def start_task_scheduler(config_file, user, skip_drain3_templates, cron_expr):
+def start_task_scheduler(config_file, user, skip_drain3_templates, cron_expr, log_level=None, log_path=None):
     """Start task scheduler"""
     # Scheduler
     scheduler = BackgroundScheduler()
@@ -48,7 +48,7 @@ def start_task_scheduler(config_file, user, skip_drain3_templates, cron_expr):
     # Add job for suites
     scheduler.add_job(
         run_task,
-        args=[config_file, user, skip_drain3_templates],
+        args=[config_file, user, skip_drain3_templates, log_level, log_path],
         trigger=trigger,
         max_instances=MAX_INSTANCES,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,
@@ -61,7 +61,7 @@ def start_task_scheduler(config_file, user, skip_drain3_templates, cron_expr):
     return scheduler
 
 
-def start_report_scheduler(config_file, cron_dir, cron_expr):
+def start_report_scheduler(config_file, cron_dir, cron_expr, log_level=None, log_path=None):
     """Start report scheduler"""
     # Scheduler
     scheduler = BackgroundScheduler()
@@ -72,7 +72,7 @@ def start_report_scheduler(config_file, cron_dir, cron_expr):
     # Add job for report
     scheduler.add_job(
         run_report,
-        args = [config_file, cron_dir],
+        args = [config_file, cron_dir, log_level, log_path],
         trigger=trigger,
         max_instances=MAX_INSTANCES,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,
@@ -101,17 +101,17 @@ def create_shutdown_handler(task_scheduler, report_scheduler):
     return shutdown
 
 
-def schedule(config_file, sha1_path, user, skip_drain3_templates):
+def schedule(config_file, sha1_path, user, skip_drain3_templates, log_level=None, log_path=None):
     """Schedule task and report jobs"""
     # Get scheduler configs
     _config = get_scheduler_config(config_file)
 
     # Start both schedulers
     task_scheduler = start_task_scheduler(
-        config_file, user, skip_drain3_templates, _config["cron_task"]
+        config_file, user, skip_drain3_templates, _config["cron_task"], log_level, log_path
     )
     report_scheduler = start_report_scheduler(
-        config_file, sha1_path, _config["cron_report"]
+        config_file, sha1_path, _config["cron_report"], log_level, log_path
     )
 
     # Create shutdown handler for graceful termination
@@ -127,8 +127,12 @@ def schedule(config_file, sha1_path, user, skip_drain3_templates):
 
 def main(args):
     """Start sheduler"""
-    # Set up logging environment
-    set_logging_env(args["--log-level"],  args["--log-path"])
+    # Get log settings
+    log_level = args["--log-level"]
+    log_path = args["--log-path"]
+
+    # Set up logging environment for scheduler startup
+    set_logging_env(log_level, log_path, job_type="scheduler")
 
     # Get user configs
     config_file = args["--config"]
@@ -137,7 +141,7 @@ def main(args):
     skip_drain3_templates = args["--skip-drain3-templates"]
 
     # Schedule jobs
-    schedule(config_file, sha1_path, user, skip_drain3_templates)
+    schedule(config_file, sha1_path, user, skip_drain3_templates, log_level, log_path)
 
 
 if __name__ == "__main__":
