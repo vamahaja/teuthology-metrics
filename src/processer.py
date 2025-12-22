@@ -271,12 +271,12 @@ def run_report(config_file, cron_dir, log_level=None, log_path=None):
     # Create new log file for this cron execution
     set_logging_env(level=log_level, path=log_path, job_type="report")
 
-    # Get current date (Monday)
+    # Get current date
     now = datetime.now(timezone.utc)
     end_date = now.strftime("%Y-%m-%d")
 
-    # Calculate date ranage
-    schedule_date = now - timedelta(days=3)
+    # Calculate date range (last 24 hours)
+    schedule_date = now - timedelta(days=1)
     start_date = schedule_date.strftime("%Y-%m-%d")
     sha_id = open(f"{cron_dir}/{start_date}").read().strip()
 
