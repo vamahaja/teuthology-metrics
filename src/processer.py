@@ -98,7 +98,7 @@ def query_data(client, branch, start_date, end_date, index, sha_id=None):
         start_date: Start date string in YYYY-MM-DD format.
         end_date: End date string in YYYY-MM-DD format.
         index: OpenSearch index name.
-        sha_id: SHA ID to filter results.
+        sha_id: Optional SHA ID to filter results.
 
     Returns:
         List of hits from OpenSearch.
@@ -114,16 +114,16 @@ def query_data(client, branch, start_date, end_date, index, sha_id=None):
     all_hits = []
     while current <= end:
         date = current.strftime("%Y-%m-%d")
-        _query = { 
-            "bool":
-                { "must": 
-                    [
-                        {"wildcard": {"posted.keyword": f"{date}*"}},
-                        {"term": {"branch.keyword": branch}},
-                        {"term": {"sha1.keyword": sha_id}},
-                    ]
-                }
-            }
+        # Build query conditions
+        must_conditions = [
+            {"wildcard": {"posted.keyword": f"{date}*"}},
+            {"term": {"branch.keyword": branch}},
+        ]
+        # Only filter by sha_id if provided
+        if sha_id:
+            must_conditions.append({"term": {"sha1.keyword": sha_id}})
+        
+        _query = {"bool": {"must": must_conditions}}
         response = query(client, _query, index)
         if response and "hits" in response:
             all_hits.extend(response["hits"]["hits"])
@@ -133,7 +133,7 @@ def query_data(client, branch, start_date, end_date, index, sha_id=None):
 
 
 def teuthology_report(
-        hits, branch, results_server, sha_id, platform="OpenStack"
+        hits, branch, results_server, sha_id=None, platform="OpenStack"
     ):
     """Render the HTML report using Jinja2 template.
 
@@ -141,7 +141,7 @@ def teuthology_report(
         hits: List of hits from OpenSearch.
         branch: Branch name (e.g., quincy, reef, main).
         results_server: Base URL for the results server.
-        sha_id: SHA ID to include in the report.
+        sha_id: Optional SHA ID to include in the report.
         platform: Cloud platform
 
     Returns:
@@ -164,6 +164,12 @@ def teuthology_report(
             or posted > suite_latest[suite_name]["posted"]
         ):
             suite_latest[suite_name] = {"posted": posted, "hit": hit}
+
+    # Extract sha_id from data if not provided
+    if not sha_id and suite_latest:
+        # Get sha_id from the most recent entry
+        most_recent = max(suite_latest.values(), key=lambda x: x["posted"])
+        sha_id = most_recent["hit"]["_source"].get("sha1", "N/A")
 
     # Prepare the data from the latest entries
     data = []
@@ -196,7 +202,7 @@ def teuthology_report(
 
 
 def publish_report(
-        config_file, start_date, end_date, branch, address, sha_id
+        config_file, start_date, end_date, branch, address, sha_id=None
     ):
     """Send teuthology report mail
     
@@ -206,7 +212,7 @@ def publish_report(
         end_date: Report end date
         branch: Ceph build branch
         address: Sender email address
-        sha_id: Build shaman id
+        sha_id: Optional build shaman id
     """
     # Load configurations
     config = get_report_config(config_file)
@@ -266,7 +272,7 @@ def run_task(config_file, user, skip_drain3_templates, log_level=None, log_path=
         log.debug("[TASK JOB END]")
 
 
-def run_report(config_file, cron_dir, log_level=None, log_path=None):
+def run_report(config_file, cron_dir=None, log_level=None, log_path=None):
     """Run teuthology report process"""
     # Create new log file for this cron execution
     set_logging_env(level=log_level, path=log_path, job_type="report")
@@ -278,7 +284,16 @@ def run_report(config_file, cron_dir, log_level=None, log_path=None):
     # Calculate date range (last 24 hours)
     schedule_date = now - timedelta(days=1)
     start_date = schedule_date.strftime("%Y-%m-%d")
-    sha_id = open(f"{cron_dir}/{start_date}").read().strip()
+
+    # Try to read sha_id from file if cron_dir is provided
+    sha_id = None
+    if cron_dir:
+        sha_file = f"{cron_dir}/{start_date}"
+        if os.path.exists(sha_file):
+            sha_id = open(sha_file).read().strip()
+            log.debug(f"Using sha_id from file: {sha_id}")
+        else:
+            log.debug(f"SHA file not found: {sha_file}, proceeding without sha_id")
 
     # Get configs
     _config = get_scheduler_config(config_file)
