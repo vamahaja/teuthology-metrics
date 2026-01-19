@@ -59,6 +59,7 @@ for file in /app/*.ndjson; do
   RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
     "$IMPORT_URL" \
     -u "admin:${OPENSEARCH_INITIAL_ADMIN_PASSWORD}" \
+    -H "securitytenant: global" \
     -H "osd-xsrf: true" \
     -F "file=@$file")
   
