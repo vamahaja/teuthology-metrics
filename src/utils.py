@@ -137,16 +137,23 @@ def send_email(config, subject, html_body, address):
         config: SMTP server config file path
         subject: Subject of the email
         html_body: HTML content of the email
-        address: Reciever email address
+        address: Receiver email address(es). Can be a single email string
+                 or comma-separated list of emails.
     """
     # Get SMTP server configuration
     config = get_smtp_config(config)
+
+    # Parse email addresses (support comma-separated list)
+    if isinstance(address, str):
+        recipients = [email.strip() for email in address.split(",")]
+    else:
+        recipients = [address]
 
     # Set email metadata
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = config.get("sender")
-    msg["To"] = address
+    msg["To"] = ", ".join(recipients)
 
     # Set email body
     mime_text = MIMEText(html_body, "html")
@@ -161,8 +168,8 @@ def send_email(config, subject, html_body, address):
         if username and password:
             server.login(username, password)
 
-        # Send email
-        server.sendmail(msg.get("From"),  msg.get("To"), msg.as_string())
+        # Send email to all recipients
+        server.sendmail(msg.get("From"), recipients, msg.as_string())
     
     # Debug
-    log.debug(f"Report sent to {address} sucessfully")
+    log.debug(f"Report sent to {recipients} successfully")
