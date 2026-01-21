@@ -75,6 +75,17 @@ uv run python report.py \
   --sha-id a6c7445ba1ccce82c5afae9856e2fa4ea693cd86
 ```
 
+To send to multiple recipients, use comma-separated email addresses:
+```sh
+uv run python report.py \
+  --config config.cfg \
+  --branch main \
+  --start-date 2025-11-21 \
+  --end-date 2025-11-23 \
+  --email-address "user1@example.com,user2@example.com,user3@example.com" \
+  --sha-id a6c7445ba1ccce82c5afae9856e2fa4ea693cd86
+```
+
 ### Start scheduler
 
 Start scheduler for teuthology triggered runs

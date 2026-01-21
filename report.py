@@ -16,7 +16,8 @@ Options:
     --branch <branch>             Branch name (e.g., quincy, reef, main).
     --start-date <start-date>     Report start date (YYYY-MM-DD).
     --end-date <end-date>         Report end date (YYYY-MM-DD).
-    --email-address <email>       Email address to send the report to.
+    --email-address <email>       Email address to send the report to (or
+                                  comma-separated list of emails).
     --sha-id <sha-id>             SHA ID to filter results.
     --log-level <LOG>             Log level for log utility
     --log-path <LOG_PATH>         Log file path for log utility
