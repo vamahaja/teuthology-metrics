@@ -184,6 +184,7 @@ def teuthology_report(
                 "passed": results.get("pass", 0),
                 "failed": results.get("fail", 0),
                 "dead": results.get("dead", 0),
+                "running": results.get("running", 0),
                 "waiting": results.get("waiting", 0),
                 "queued": results.get("queued", 0),
             }
