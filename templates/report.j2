@@ -64,14 +64,21 @@
             <th style="background-color: #D4D7D4;">Total</th>
             <th style="background-color: #D4D7D4;">Passed</th>
             <th style="background-color: #D4D7D4;">Failed</th>
+            <th style="background-color: #D4D7D4;">Dead</th>
+            <th style="background-color: #D4D7D4;">Running</th>
+            <th style="background-color: #D4D7D4;">Waiting</th>
+            <th style="background-color: #D4D7D4;">Queued</th>
         </tr>
         {% for entry in data %}
-        {% set total_failed = entry.failed + entry.dead + entry.waiting + entry.queued %}
-        <tr style="background-color: {% if entry.total == 0 %}#ECECC3{% elif total_failed > 0 %}#FCD0D0{% else %}#DDFFDD{% endif %};">
+        <tr style="background-color: {% if entry.total == 0 %}#ECECC3{% elif entry.failed > 0 or entry.dead > 0 %}#FCD0D0{% else %}#DDFFDD{% endif %};">
             <td><b><a href="{{ entry.href }}" style="color: #0645AD;">{{ entry.suite }}</a></b></td>
             <td>{{ entry.total }}</td>
             <td>{{ entry.passed }}</td>
-            <td>{{ total_failed }}</td>
+            <td>{{ entry.failed }}</td>
+            <td>{{ entry.dead }}</td>
+            <td>{{ entry.running }}</td>
+            <td>{{ entry.waiting }}</td>
+            <td>{{ entry.queued }}</td>
         </tr>
         {% endfor %}
     </table>
