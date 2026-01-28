@@ -70,7 +70,7 @@
             <th style="background-color: #D4D7D4;">Queued</th>
         </tr>
         {% for entry in data %}
-        <tr style="background-color: {% if entry.total == 0 %}#ECECC3{% elif entry.failed > 0 or entry.dead > 0 %}#FCD0D0{% else %}#DDFFDD{% endif %};">
+        <tr style="background-color: {% if entry.failed > 0 or entry.dead > 0 %}#FCD0D0{% elif entry.passed == 0 %}#ECECC3{% else %}#DDFFDD{% endif %};">
             <td><b><a href="{{ entry.href }}" style="color: #0645AD;">{{ entry.suite }}</a></b></td>
             <td>{{ entry.total }}</td>
             <td>{{ entry.passed }}</td>
