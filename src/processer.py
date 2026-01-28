@@ -12,6 +12,7 @@ from .fetcher import (
     connect as paddle_connect,
     get_data,
     get_runs,
+    get_runs_by_branch_and_date,
 )
 from .ingest import (
     connect as opensearch_connect,
@@ -131,6 +132,23 @@ def query_data(client, branch, start_date, end_date, index, sha_id=None):
 
     return all_hits
 
+def query_data_from_paddle(config_file, branch, start_date, end_date, sha_id=None):
+    """Fetch report data from Paddle by branch and date range.
+
+    Returns a list in the same shape as OpenSearch hits so teuthology_report
+    can be used unchanged. Paddle run objects must include: name, suite,
+    posted, sha1, results (with pass, fail, dead, running, waiting, queued, total).
+    """
+    log.debug(
+        f"Fetching data from Paddle for branch {branch} from {start_date} to {end_date}"
+    )
+    api_url = paddle_connect(config_file)
+    runs = get_runs_by_branch_and_date(api_url, branch, start_date, end_date)
+    if sha_id:
+        runs = [r for r in runs if r.get("sha1") == sha_id]
+    hits = [{"_id": r.get("name", ""), "_source": r} for r in runs]
+    return hits
+
 
 def teuthology_report(
         hits, branch, results_server, sha_id=None, platform="OpenStack"
@@ -203,7 +221,8 @@ def teuthology_report(
 
 
 def publish_report(
-        config_file, start_date, end_date, branch, address, sha_id=None
+        config_file, start_date, end_date, branch, address, sha_id=None,
+        use_paddle=False
     ):
     """Send teuthology report mail
     
@@ -214,6 +233,7 @@ def publish_report(
         branch: Ceph build branch
         address: Sender email address
         sha_id: Optional build shaman id
+        use_paddle: If True, fetch report data from Paddle instead of OpenSearch
     """
     # Load configurations
     config = get_report_config(config_file)
@@ -221,13 +241,16 @@ def publish_report(
         config.get("opensearch_index"), config.get("results_server")
     )
 
-    # Connect to OpenSearch client
-    client = opensearch_connect(config_file)
-
-    # Fetch data for the given branch and date range
-    hits = query_data(
-        client, branch, start_date, end_date, index, sha_id,
-    )
+    if use_paddle:
+        log.info(f"Fetching report data from Paddle for branch {branch}")
+        hits = query_data_from_paddle(
+            config_file, branch, start_date, end_date, sha_id
+        )
+    else:
+        client = opensearch_connect(config_file)
+        hits = query_data(
+            client, branch, start_date, end_date, index, sha_id,
+        )
 
     # Check if data is available
     if not hits:
@@ -273,7 +296,7 @@ def run_task(config_file, user, skip_drain3_templates, log_level=None, log_path=
         log.debug("[TASK JOB END]")
 
 
-def run_report(config_file, cron_dir=None, log_level=None, log_path=None):
+def run_report(config_file, cron_dir=None, log_level=None, log_path=None, use_paddle=False):
     """Run teuthology report process"""
     # Create new log file for this cron execution
     set_logging_env(level=log_level, path=log_path, job_type="report")
@@ -316,6 +339,7 @@ def run_report(config_file, cron_dir=None, log_level=None, log_path=None):
                 branch=branch,
                 sha_id=sha_id,
                 address=email,
+                use_paddle=use_paddle,
             )
         except Exception as exc:
             log.error(f"[REPORT JOB ERROR] branch={branch} | error={exc}")

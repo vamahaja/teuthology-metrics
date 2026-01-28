@@ -6,6 +6,7 @@ Usage:
         --sha1-path <sha1-txt-file>
         --user <user>
         [--skip-drain3-templates]
+        [--use-paddle]
         [--log-level <LOG>]
         [--log-path <LOG_PATH>]
 
@@ -14,6 +15,7 @@ Options:
     --sha1-path <sha1-txt-path>   Path to sha1 text file
     --user <user>                 Filter by user
     --skip-drain3-templates       Skip processing Drain3 templates
+    --use-paddle                  Fetch report data from Paddle instead of OpenSearch.
     --log-level <LOG>             Log level for log utility
     --log-path <LOG_PATH>         Log file path for log utility
 """
@@ -61,7 +63,7 @@ def start_task_scheduler(config_file, user, skip_drain3_templates, cron_expr, lo
     return scheduler
 
 
-def start_report_scheduler(config_file, cron_dir, cron_expr, log_level=None, log_path=None):
+def start_report_scheduler(config_file, cron_dir, cron_expr, log_level=None, log_path=None, use_paddle=False):
     """Start report scheduler"""
     # Scheduler
     scheduler = BackgroundScheduler()
@@ -72,7 +74,7 @@ def start_report_scheduler(config_file, cron_dir, cron_expr, log_level=None, log
     # Add job for report
     scheduler.add_job(
         run_report,
-        args = [config_file, cron_dir, log_level, log_path],
+        args = [config_file, cron_dir, log_level, log_path, use_paddle],
         trigger=trigger,
         max_instances=MAX_INSTANCES,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,
@@ -101,7 +103,7 @@ def create_shutdown_handler(task_scheduler, report_scheduler):
     return shutdown
 
 
-def schedule(config_file, sha1_path, user, skip_drain3_templates, log_level=None, log_path=None):
+def schedule(config_file, sha1_path, user, skip_drain3_templates, log_level=None, log_path=None, use_paddle=False):
     """Schedule task and report jobs"""
     # Get scheduler configs
     _config = get_scheduler_config(config_file)
@@ -111,7 +113,7 @@ def schedule(config_file, sha1_path, user, skip_drain3_templates, log_level=None
         config_file, user, skip_drain3_templates, _config["cron_task"], log_level, log_path
     )
     report_scheduler = start_report_scheduler(
-        config_file, sha1_path, _config["cron_report"], log_level, log_path
+        config_file, sha1_path, _config["cron_report"], log_level, log_path, use_paddle
     )
 
     # Create shutdown handler for graceful termination
@@ -139,10 +141,10 @@ def main(args):
     sha1_path = args["--sha1-path"]
     user = args["--user"]
     skip_drain3_templates = args["--skip-drain3-templates"]
+    use_paddle = args["--use-paddle"]
 
     # Schedule jobs
-    schedule(config_file, sha1_path, user, skip_drain3_templates, log_level, log_path)
-
+    schedule(config_file, sha1_path, user, skip_drain3_templates, log_level, log_path, use_paddle=use_paddle)
 
 if __name__ == "__main__":
     # Get docopt and process
