@@ -56,6 +56,40 @@ def get_runs(base_url, segments):
     # Fetch data from the constructed URL
     return get_data(url)
 
+def get_runs_by_branch_and_date(base_url, branch, start_date, end_date):
+    """Fetch teuthology runs from Paddle by branch and date range.
+
+    Args:
+        base_url: Paddle API base URL
+        branch: Branch name (e.g., quincy, reef, main)
+        start_date: Start date YYYY-MM-DD
+        end_date: End date YYYY-MM-DD
+
+    Returns:
+        List of run objects from Paddle
+    """
+    from datetime import datetime, timedelta
+
+    log.debug(f"Fetching runs from Paddle: branch={branch} from {start_date} to {end_date}")
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+    current = datetime.strptime(start_date, "%Y-%m-%d")
+    all_runs = []
+    while current <= end:
+        date = current.strftime("%Y-%m-%d")
+        url = requests.utils.requote_uri(f"{base_url}/runs/branch/{branch}/date/{date}")
+        try:
+            data = get_data(url)
+            if isinstance(data, list):
+                all_runs.extend(data)
+            elif isinstance(data, dict) and "runs" in data:
+                all_runs.extend(data["runs"])
+            else:
+                log.warning(f"Unexpected Paddle response for {branch}/{date}, skipping")
+        except (ValueError, requests.exceptions.RequestException) as e:
+            log.warning(f"Failed to fetch runs for {branch}/{date}: {e}")
+        current += timedelta(days=1)
+    return all_runs
+
 
 def get_jobs(run, jobs_dir, logs_dir, skip_pass_logs):
     """Fetch jobs for the given teuthology run"""
