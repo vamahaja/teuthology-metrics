@@ -5,6 +5,50 @@ from .config import get_opensearch_config
 
 log = logging.getLogger("teuthology-metrics")
 
+# Fields that can be object or primitive - need normalization to avoid mapping conflicts
+PROBLEMATIC_FIELDS = ["extra_system_packages", "extra_packages"]
+
+
+def sanitize_document(doc):
+    """Recursively process document to normalize problematic fields.
+    
+    For fields in PROBLEMATIC_FIELDS:
+        - null → {}
+        - string → {"value": str}
+        - list → {"items": [...]}
+        - dict → kept as-is
+    
+    Args:
+        doc: Document to sanitize (dict, list, or primitive)
+        
+    Returns:
+        Sanitized document with normalized problematic fields
+    """
+    if isinstance(doc, dict):
+        result = {}
+        for key, value in doc.items():
+            if key in PROBLEMATIC_FIELDS:
+                # Normalize problematic fields to always be objects
+                if value is None:
+                    result[key] = {}
+                elif isinstance(value, str):
+                    result[key] = {"value": value}
+                elif isinstance(value, list):
+                    result[key] = {"items": value}
+                elif isinstance(value, dict):
+                    result[key] = sanitize_document(value)
+                else:
+                    result[key] = {"value": value}
+            else:
+                # Recursively process other fields
+                result[key] = sanitize_document(value)
+        return result
+    elif isinstance(doc, list):
+        return [sanitize_document(item) for item in doc]
+    else:
+        # Primitives (str, int, bool, None) - return as-is
+        return doc
+
 
 def connect(config):
     """Connect to OpenSearch instance"""
@@ -106,10 +150,13 @@ def insert_failure_template(client, message, template_miner):
 
 def insert_job(client, job_id, job_data):
     """Insert a teuthology job in OpenSearch"""
+    # Sanitize job data to normalize problematic fields
+    sanitized_data = sanitize_document(job_data)
+    
     # Update job data
     _index = get_index_config().get("jobs").get("name")
     try:
-        insert_record(client, _index, job_id, job_data)
+        insert_record(client, _index, job_id, sanitized_data)
     except Exception as e:
         log.error(
             f"Error: Failed to insert job job-id {job_id} with error\n{str(e)}"
@@ -118,10 +165,13 @@ def insert_job(client, job_id, job_data):
 
 def insert_run(client, name, run_data):
     """Insert a teuthology run in OpenSearch"""
+    # Sanitize run data to normalize problematic fields
+    sanitized_data = sanitize_document(run_data)
+    
     # Insert runs to openserach
     _index = get_index_config().get("runs").get("name")
     try:
-        insert_record(client, _index, name, run_data)
+        insert_record(client, _index, name, sanitized_data)
     except Exception as e:
         log.error(
             f"Error: Failed to insert run for {name} with error\n{str(e)}"
