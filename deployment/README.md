@@ -37,9 +37,11 @@ This document deploys opensearch for processing test run results data from paddl
     ```sh
     cat <<'EOF' > .env
     OPENSEARCH_INITIAL_ADMIN_PASSWORD='<passwd>'
-    APP_ARGS='--config /usr/share/config.cfg --sha1-path /usr/share/sha1 --user teuthology'
+    APP_ARGS='--config /usr/share/config.cfg --sha1-path /usr/share/sha1 --user cephuser'
     EOF
     ```
+    - `--user` filters both task runs and scheduled report data to that user (e.g. `cephuser`). Omit or change as needed for your environment.
+    - Add `--use-paddle` to have reports fetch data from Paddle instead of OpenSearch.
 
 6. **Start the services**
     ```sh

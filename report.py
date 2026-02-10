@@ -8,6 +8,7 @@ Usage:
               --end-date <end-date> 
               --email-address <email> 
               [--sha-id <sha-id>]
+              [--user <user>]
               [--use-paddle]
               [--log-level <LOG>]
               [--log-path <LOG_PATH>]
@@ -20,6 +21,7 @@ Options:
     --email-address <email>       Email address to send the report to (or
                                   comma-separated list of emails).
     --sha-id <sha-id>             SHA ID to filter results.
+    --user <user>                 User to filter report data (e.g. cephuser).
     --use-paddle                  Fetch report data from Paddle instead of OpenSearch.
     --log-level <LOG>             Log level for log utility
     --log-path <LOG_PATH>         Log file path for log utility
@@ -51,12 +53,16 @@ def main(args):
     # get sha_id if provided
     sha_id = args.get("--sha-id")
 
+    # get user if provided (e.g. cephuser - filters report to that user only)
+    user = args.get("--user")
+
     # check if use_paddle flag is set
     use_paddle = args.get("--use-paddle", False)
 
     # Call main function
     publish_report(
-        config_file, start_date, end_date, branch, address, sha_id, use_paddle=use_paddle
+        config_file, start_date, end_date, branch, address, sha_id, 
+        use_paddle=use_paddle, user=user
     )
 
 

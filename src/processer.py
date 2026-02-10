@@ -90,16 +90,17 @@ def process(config_file, skip_drain3_templates, segments):
         update_runs(client, run, template_miner)
 
 
-def query_data(client, branch, start_date, end_date, index, sha_id=None):
+def query_data(client, branch, start_date, end_date, index, sha_id=None, user=None):
     """Fetch data for a specific branch within a date range.
 
     Args:
-        config_file: Configuration file path
+        client: OpenSearch client
         branch: Branch name (e.g., quincy, reef, main).
         start_date: Start date string in YYYY-MM-DD format.
         end_date: End date string in YYYY-MM-DD format.
         index: OpenSearch index name.
         sha_id: Optional SHA ID to filter results.
+        user: Optional user to filter results (e.g. ubuntu).
 
     Returns:
         List of hits from OpenSearch.
@@ -123,6 +124,9 @@ def query_data(client, branch, start_date, end_date, index, sha_id=None):
         # Only filter by sha_id if provided
         if sha_id:
             must_conditions.append({"term": {"sha1.keyword": sha_id}})
+        # Only filter by user if provided
+        if user:
+            must_conditions.append({"term": {"user.keyword": user}})
         
         _query = {"bool": {"must": must_conditions}}
         response = query(client, _query, index)
@@ -132,7 +136,7 @@ def query_data(client, branch, start_date, end_date, index, sha_id=None):
 
     return all_hits
 
-def query_data_from_paddle(config_file, branch, start_date, end_date, sha_id=None):
+def query_data_from_paddle(config_file, branch, start_date, end_date, sha_id=None, user=None):
     """Fetch report data from Paddle by branch and date range.
 
     Returns a list in the same shape as OpenSearch hits so teuthology_report
@@ -144,6 +148,8 @@ def query_data_from_paddle(config_file, branch, start_date, end_date, sha_id=Non
     )
     api_url = paddle_connect(config_file)
     runs = get_runs_by_branch_and_date(api_url, branch, start_date, end_date)
+    if user:
+        runs = [r for r in runs if r.get("user") == user]
     if sha_id:
         runs = [r for r in runs if r.get("sha1") == sha_id]
     hits = [{"_id": r.get("name", ""), "_source": r} for r in runs]
@@ -222,7 +228,7 @@ def teuthology_report(
 
 def publish_report(
         config_file, start_date, end_date, branch, address, sha_id=None,
-        use_paddle=False
+        use_paddle=False, user=None
     ):
     """Send teuthology report mail
     
@@ -234,6 +240,7 @@ def publish_report(
         address: Sender email address
         sha_id: Optional build shaman id
         use_paddle: If True, fetch report data from Paddle instead of OpenSearch
+        user: Optional user to filter report data (e.g. ubuntu)
     """
     # Load configurations
     config = get_report_config(config_file)
@@ -244,12 +251,12 @@ def publish_report(
     if use_paddle:
         log.info(f"Fetching report data from Paddle for branch {branch}")
         hits = query_data_from_paddle(
-            config_file, branch, start_date, end_date, sha_id
+            config_file, branch, start_date, end_date, sha_id, user
         )
     else:
         client = opensearch_connect(config_file)
         hits = query_data(
-            client, branch, start_date, end_date, index, sha_id,
+            client, branch, start_date, end_date, index, sha_id, user
         )
 
     # Check if data is available
@@ -296,7 +303,7 @@ def run_task(config_file, user, skip_drain3_templates, log_level=None, log_path=
         log.debug("[TASK JOB END]")
 
 
-def run_report(config_file, cron_dir=None, log_level=None, log_path=None, use_paddle=False):
+def run_report(config_file, cron_dir=None, log_level=None, log_path=None, use_paddle=False, user=None):
     """Run teuthology report process"""
     # Create new log file for this cron execution
     set_logging_env(level=log_level, path=log_path, job_type="report")
@@ -340,6 +347,7 @@ def run_report(config_file, cron_dir=None, log_level=None, log_path=None, use_pa
                 sha_id=sha_id,
                 address=email,
                 use_paddle=use_paddle,
+                user=user,
             )
         except Exception as exc:
             log.error(f"[REPORT JOB ERROR] branch={branch} | error={exc}")
