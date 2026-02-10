@@ -63,7 +63,7 @@ def start_task_scheduler(config_file, user, skip_drain3_templates, cron_expr, lo
     return scheduler
 
 
-def start_report_scheduler(config_file, cron_dir, cron_expr, log_level=None, log_path=None, use_paddle=False):
+def start_report_scheduler(config_file, cron_dir, cron_expr, user=None, log_level=None, log_path=None, use_paddle=False):
     """Start report scheduler"""
     # Scheduler
     scheduler = BackgroundScheduler()
@@ -74,7 +74,7 @@ def start_report_scheduler(config_file, cron_dir, cron_expr, log_level=None, log
     # Add job for report
     scheduler.add_job(
         run_report,
-        args = [config_file, cron_dir, log_level, log_path, use_paddle],
+        args=[config_file, cron_dir, log_level, log_path, use_paddle, user],
         trigger=trigger,
         max_instances=MAX_INSTANCES,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,
@@ -113,7 +113,7 @@ def schedule(config_file, sha1_path, user, skip_drain3_templates, log_level=None
         config_file, user, skip_drain3_templates, _config["cron_task"], log_level, log_path
     )
     report_scheduler = start_report_scheduler(
-        config_file, sha1_path, _config["cron_report"], log_level, log_path, use_paddle
+        config_file, sha1_path, _config["cron_report"], user, log_level, log_path, use_paddle
     )
 
     # Create shutdown handler for graceful termination
